@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sistema Operativo · Lana Rosa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --rosa-fuerte:#d8017c;
+    --rosa-medio:#ff8fd4;
+    --rosa-suave:#f9ddf4;
+    --azul-acero:#85a3c0;
+    --blanco-hueso:#efebeb;
+    --tinta:#2b2430;
+    --tinta-suave:#6b6270;
+    --verde:#3f8f6b;
+    --ambar:#c98a1f;
+    --rojo:#b23a48;
+    --borde:#e3d7e0;
+    --radio:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Poppins',sans-serif;
+    background:var(--blanco-hueso);
+    color:var(--tinta);
+    min-height:100vh;
+  }
+  code, .mono{font-family:'IBM Plex Mono',monospace;}
+  a{color:inherit;}
+  button{font-family:inherit;cursor:pointer;}
+  :focus-visible{outline:3px solid var(--azul-acero);outline-offset:2px;}
+  @media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important;}}
+
+  /* ---------- LOGIN ---------- */
+  #pantalla-login{
+    min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 20% 20%, var(--rosa-suave), var(--blanco-hueso) 55%);
+    padding:24px;
+  }
+  .tarjeta-login{
+    background:#fff;border:1px solid var(--borde);border-radius:var(--radio);
+    padding:40px 36px;width:100%;max-width:380px;
+    box-shadow:0 20px 60px -30px rgba(216,1,124,0.35);
+  }
+  .marca-login{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  .marca-login .punto{width:10px;height:10px;border-radius:50%;background:var(--rosa-fuerte);}
+  .marca-login span{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--tinta-suave);font-weight:600;}
+  .tarjeta-login h1{font-size:24px;margin:2px 0 4px;font-weight:700;}
+  .tarjeta-login p.sub{margin:0 0 26px;color:var(--tinta-suave);font-size:14px;}
+  .campo{margin-bottom:16px;}
+  .campo label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--tinta);}
+  .campo input{
+    width:100%;padding:11px 13px;border:1.5px solid var(--borde);border-radius:9px;
+    font-size:14px;font-family:inherit;background:var(--blanco-hueso);
+  }
+  .campo input:focus{border-color:var(--rosa-fuerte);}
+  .btn-primario{
+    width:100%;padding:12px;border:none;border-radius:9px;background:var(--rosa-fuerte);
+    color:#fff;font-weight:600;font-size:14px;margin-top:6px;
+  }
+  .btn-primario:hover{background:#b40166;}
+  .btn-primario:disabled{opacity:.6;cursor:default;}
+  #error-login{color:var(--rojo);font-size:13px;margin-top:12px;display:none;}
+  .nota-auth{font-size:12px;color:var(--tinta-suave);margin-top:20px;line-height:1.5;border-top:1px dashed var(--borde);padding-top:16px;}
+
+  /* ---------- APP SHELL ---------- */
+  #app{display:none;min-height:100vh;}
+  #app.visible{display:flex;}
+  .sidebar{
+    width:230px;flex-shrink:0;background:#fff;border-right:1px solid var(--borde);
+    padding:22px 16px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;
+  }
+  .sidebar .marca{display:flex;align-items:center;gap:9px;padding:0 8px 20px;border-bottom:1px solid var(--borde);margin-bottom:16px;}
+  .sidebar .marca .punto{width:11px;height:11px;border-radius:50%;background:var(--rosa-fuerte);flex-shrink:0;}
+  .sidebar .marca .txt strong{display:block;font-size:14px;line-height:1.2;}
+  .sidebar .marca .txt span{font-size:11px;color:var(--tinta-suave);letter-spacing:.04em;}
+  nav.menu{display:flex;flex-direction:column;gap:2px;flex:1;}
+  nav.menu button{
+    display:flex;align-items:center;gap:10px;text-align:left;padding:10px 12px;border:none;
+    background:transparent;border-radius:9px;font-size:14px;font-weight:500;color:var(--tinta);
+  }
+  nav.menu button:hover{background:var(--rosa-suave);}
+  nav.menu button.activo{background:var(--rosa-fuerte);color:#fff;font-weight:600;}
+  nav.menu button .ico{width:18px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:12px;opacity:.8;}
+  .pie-sidebar{border-top:1px solid var(--borde);padding-top:14px;margin-top:10px;}
+  .pie-sidebar .usuario{font-size:12px;color:var(--tinta-suave);margin-bottom:8px;word-break:break-all;}
+  .btn-salir{width:100%;background:none;border:1px solid var(--borde);border-radius:8px;padding:8px;font-size:12px;color:var(--tinta-suave);}
+  .btn-salir:hover{border-color:var(--rojo);color:var(--rojo);}
+
+  main{flex:1;padding:32px 40px;max-width:1180px;}
+  .vista{display:none;}
+  .vista.activa{display:block;}
+  .encabezado-vista{margin-bottom:26px;}
+  .encabezado-vista h2{font-size:22px;margin:0 0 4px;font-weight:700;}
+  .encabezado-vista p{margin:0;color:var(--tinta-suave);font-size:14px;}
+
+  /* ---------- HERO / ARQUITECTURA ---------- */
+  .hero-arquitectura{
+    background:#fff;border:1px solid var(--borde);border-radius:var(--radio);
+    padding:28px 30px;margin-bottom:28px;
+  }
+  .hero-arquitectura h1{font-size:19px;margin:0 0 18px;font-weight:700;}
+  .flujo{display:flex;align-items:stretch;gap:0;}
+  .flujo .nodo{
+    flex:1;border-radius:12px;padding:16px 14px;text-align:center;
+  }
+  .flujo .nodo.crm{background:var(--rosa-suave);}
+  .flujo .nodo.so{background:var(--rosa-fuerte);color:#fff;}
+  .flujo .nodo.erp{background:#eef2f6;border:1px solid #dbe3ea;}
+  .flujo .nodo .titulo{font-weight:700;font-size:14px;margin-bottom:4px;}
+  .flujo .nodo .desc{font-size:11.5px;line-height:1.4;opacity:.9;}
+  .flujo .conector{width:34px;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--tinta-suave);}
+
+  /* ---------- KPI CARDS ---------- */
+  .grid-kpi{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:30px;}
+  .kpi{background:#fff;border:1px solid var(--borde);border-radius:var(--radio);padding:16px 18px;position:relative;overflow:hidden;}
+  .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;}
+  .kpi.verde::before{background:var(--verde);}
+  .kpi.amarillo::before{background:var(--ambar);}
+  .kpi.rojo::before{background:var(--rojo);}
+  .kpi.gris::before{background:var(--borde);}
+  .kpi .nombre{font-size:12.5px;color:var(--tinta-suave);margin-bottom:6px;font-weight:600;}
+  .kpi .valor{font-size:24px;font-weight:700;}
+  .kpi .meta{font-size:11.5px;color:var(--tinta-suave);margin-top:2px;}
+
+  .estado-vacio{
+    background:#fff;border:1px dashed var(--borde);border-radius:var(--radio);
+    padding:26px;text-align:center;color:var(--tinta-suave);font-size:13.5px;margin-bottom:30px;
+  }
+
+  /* ---------- MAPA DE PROCESOS ---------- */
+  .mapa-procesos{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;}
+  @media (max-width:1000px){.mapa-procesos{grid-template-columns:repeat(2,1fr);}}
+  @media (max-width:640px){.mapa-procesos{grid-template-columns:1fr;} main{padding:24px 18px;} #app.visible{flex-direction:column;} .sidebar{width:100%;height:auto;position:relative;flex-direction:row;flex-wrap:wrap;align-items:center;} nav.menu{flex-direction:row;flex-wrap:wrap;} .flujo{flex-direction:column;} .flujo .conector{transform:rotate(90deg);}}
+  .columna-categoria h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--tinta-suave);margin:0 0 10px;font-weight:700;}
+  .tarjeta-proceso{
+    background:#fff;border:1px solid var(--borde);border-radius:11px;padding:13px 14px;margin-bottom:10px;
+    border-left:4px solid var(--rosa-fuerte);text-align:left;width:100%;
+  }
+  .tarjeta-proceso:hover{box-shadow:0 8px 20px -14px rgba(43,36,48,0.35);}
+  .tarjeta-proceso.reservado{border-left-style:dashed;opacity:.6;}
+  .tarjeta-proceso .cod{font-size:11px;font-weight:600;color:var(--rosa-fuerte);}
+  .tarjeta-proceso.reservado .cod{color:var(--tinta-suave);}
+  .tarjeta-proceso .nom{font-size:13.5px;font-weight:600;margin:3px 0 2px;line-height:1.3;}
+  .badge-reservado{display:inline-block;font-size:10px;background:var(--blanco-hueso);color:var(--tinta-suave);padding:2px 7px;border-radius:20px;margin-top:6px;font-weight:600;}
+  .columna-categoria[data-cat="misional"] .tarjeta-proceso{border-left-color:var(--azul-acero);}
+  .columna-categoria[data-cat="misional"] .cod{color:#4c7594;}
+  .columna-categoria[data-cat="apoyo"] .tarjeta-proceso{border-left-color:var(--rosa-medio);}
+  .columna-categoria[data-cat="apoyo"] .cod{color:#c2469e;}
+  .columna-categoria[data-cat="evaluacion_mejora"] .tarjeta-proceso{border-left-color:var(--ambar);}
+  .columna-categoria[data-cat="evaluacion_mejora"] .cod{color:var(--ambar);}
+
+  /* ---------- MODAL DETALLE ---------- */
+  .capa-modal{display:none;position:fixed;inset:0;background:rgba(43,36,48,0.4);align-items:center;justify-content:center;padding:20px;z-index:50;}
+  .capa-modal.visible{display:flex;}
+  .modal{background:#fff;border-radius:var(--radio);padding:28px;max-width:460px;width:100%;max-height:85vh;overflow:auto;}
+  .modal .cod{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--rosa-fuerte);font-weight:600;}
+  .modal h3{margin:6px 0 14px;font-size:19px;}
+  .modal .campo-detalle{margin-bottom:12px;}
+  .modal .campo-detalle .etq{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--tinta-suave);font-weight:700;margin-bottom:3px;}
+  .modal .campo-detalle .val{font-size:14px;}
+  .modal .cerrar{margin-top:10px;width:100%;padding:10px;border:1px solid var(--borde);background:none;border-radius:8px;font-size:13px;}
+
+  /* ---------- LISTAS / TABLAS ---------- */
+  .barra-lista{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px;flex-wrap:wrap;}
+  .btn-secundario{background:var(--rosa-suave);border:none;color:var(--rosa-fuerte);font-weight:600;padding:9px 16px;border-radius:8px;font-size:13.5px;}
+  .btn-secundario:hover{background:var(--rosa-medio);color:#fff;}
+  .tabla-simple{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--borde);border-radius:var(--radio);overflow:hidden;}
+  .tabla-simple th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--tinta-suave);background:var(--blanco-hueso);padding:11px 14px;font-weight:700;}
+  .tabla-simple td{padding:11px 14px;font-size:13.5px;border-top:1px solid var(--borde);}
+  .pill{display:inline-block;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;}
+  .pill.pendiente{background:#eef2f6;color:var(--tinta-suave);}
+  .pill.en_curso, .pill.en_tratamiento{background:#fff3e0;color:var(--ambar);}
+  .pill.cumplida, .pill.mitigado, .pill.cerrado{background:#e6f4ef;color:var(--verde);}
+  .pill.vencida{background:#fbe9e9;color:var(--rojo);}
+
+  /* ---------- FORM FLOTANTE ---------- */
+  .capa-form{display:none;position:fixed;inset:0;background:rgba(43,36,48,0.4);align-items:flex-start;justify-content:center;padding:6vh 20px;z-index:60;overflow:auto;}
+  .capa-form.visible{display:flex;}
+  .panel-form{background:#fff;border-radius:var(--radio);padding:28px;max-width:440px;width:100%;}
+  .panel-form h3{margin:0 0 18px;font-size:18px;}
+  .panel-form .fila-botones{display:flex;gap:10px;margin-top:18px;}
+  .panel-form .fila-botones button{flex:1;}
+  select, textarea{width:100%;padding:11px 13px;border:1.5px solid var(--borde);border-radius:9px;font-size:14px;font-family:inherit;background:var(--blanco-hueso);}
+  textarea{resize:vertical;min-height:70px;}
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="pantalla-login">
+  <div class="tarjeta-login">
+    <div class="marca-login"><span class="punto"></span><span>Lana Rosa</span></div>
+    <h1>Sistema Operativo</h1>
+    <p class="sub">El cerebro digital de Lana Rosa — gestión, procesos y proyectos.</p>
+    <form id="form-login">
+      <div class="campo">
+        <label for="correo">Correo</label>
+        <input type="email" id="correo" required autocomplete="username" />
+      </div>
+      <div class="campo">
+        <label for="clave">Contraseña</label>
+        <input type="password" id="clave" required autocomplete="current-password" />
+      </div>
+      <button type="submit" class="btn-primario" id="btn-login">Entrar</button>
+      <div id="error-login"></div>
+    </form>
+    <div class="nota-auth">Este acceso usa el mismo correo y contraseña del ERP de Lana Rosa — no necesitas crear una cuenta nueva.</div>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="app">
+  <aside class="sidebar">
+    <div class="marca"><span class="punto"></span><div class="txt"><strong>Sistema Operativo</strong><span>LANA ROSA</span></div></div>
+    <nav class="menu">
+      <button data-vista="dashboard" class="activo"><span class="ico">◆</span> Dashboard</button>
+      <button data-vista="procesos"><span class="ico">▤</span> Procesos</button>
+      <button data-vista="proyectos"><span class="ico">▶</span> Proyectos</button>
+      <button data-vista="riesgos"><span class="ico">!</span> Riesgos</button>
+      <button data-vista="tareas"><span class="ico">✓</span> Tareas</button>
+      <button data-vista="indicadores"><span class="ico">%</span> Indicadores</button>
+      <button data-vista="documentos"><span class="ico">▭</span> Documentos</button>
+    </nav>
+    <div class="pie-sidebar">
+      <div class="usuario" id="usuario-actual">—</div>
+      <button class="btn-salir" id="btn-salir">Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <main>
+    <!-- ---- DASHBOARD ---- -->
+    <section class="vista activa" data-vista="dashboard">
+      <div class="encabezado-vista">
+        <h2>Dashboard</h2>
+        <p>Vista general de gestión — procesos, indicadores y estado del ecosistema.</p>
+      </div>
+
+      <div class="hero-arquitectura">
+        <h1>Cómo encaja el Sistema Operativo</h1>
+        <div class="flujo">
+          <div class="nodo crm">
+            <div class="titulo">CRM</div>
+            <div class="desc">Relación con clientes, pedidos, producción del Taller</div>
+          </div>
+          <div class="conector">↔</div>
+          <div class="nodo so">
+            <div class="titulo">SISTEMA OPERATIVO</div>
+            <div class="desc">Procesos · proyectos · riesgos · KPI · documentos</div>
+          </div>
+          <div class="conector">↔</div>
+          <div class="nodo erp">
+            <div class="titulo">ERP</div>
+            <div class="desc">Ventas, inventario, contabilidad, nómina</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="grid-kpi" class="grid-kpi"></div>
+      <div id="estado-vacio-kpi" class="estado-vacio" style="display:none;">
+        Todavía no hay indicadores registrados. Se crean desde la pestaña <strong>Indicadores</strong>, uno por proceso.
+      </div>
+
+      <div class="encabezado-vista" style="margin-top:8px;">
+        <h2 style="font-size:17px;">Mapa de procesos</h2>
+        <p>Los procesos con borde punteado están reservados — se activan cuando la empresa crezca, sin rediseñar nada.</p>
+      </div>
+      <div id="mapa-procesos" class="mapa-procesos"></div>
+    </section>
+
+    <!-- ---- PROCESOS ---- -->
+    <section class="vista" data-vista="procesos">
+      <div class="encabezado-vista"><h2>Procesos</h2><p>Catálogo completo — estratégicos, misionales, de apoyo y de evaluación/mejora.</p></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Código</th><th>Nombre</th><th>Responsable</th><th>Estado</th></tr></thead>
+        <tbody id="tabla-procesos"></tbody>
+      </table>
+    </section>
+
+    <!-- ---- PROYECTOS ---- -->
+    <section class="vista" data-vista="proyectos">
+      <div class="encabezado-vista"><h2>Proyectos</h2><p>Iniciativas activas: Fondo Emprender, apertura de Villamaría, y lo que sigue.</p></div>
+      <div class="barra-lista"><span></span><button class="btn-secundario" id="btn-nuevo-proyecto">+ Nuevo proyecto</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Código</th><th>Nombre</th><th>Proceso</th><th>Estado</th><th>Avance</th></tr></thead>
+        <tbody id="tabla-proyectos"></tbody>
+      </table>
+    </section>
+
+    <!-- ---- RIESGOS ---- -->
+    <section class="vista" data-vista="riesgos">
+      <div class="encabezado-vista"><h2>Riesgos</h2><p>Riesgos identificados sobre procesos y proyectos.</p></div>
+      <div class="barra-lista"><span></span><button class="btn-secundario" id="btn-nuevo-riesgo">+ Nuevo riesgo</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Código</th><th>Descripción</th><th>Probabilidad</th><th>Impacto</th><th>Estado</th></tr></thead>
+        <tbody id="tabla-riesgos"></tbody>
+      </table>
+    </section>
+
+    <!-- ---- TAREAS ---- -->
+    <section class="vista" data-vista="tareas">
+      <div class="encabezado-vista"><h2>Tareas</h2><p>Acciones, entregables y seguimientos con responsable y fecha.</p></div>
+      <div class="barra-lista"><span></span><button class="btn-secundario" id="btn-nueva-tarea">+ Nueva tarea</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Código</th><th>Título</th><th>Responsable</th><th>Fecha límite</th><th>Estado</th></tr></thead>
+        <tbody id="tabla-tareas"></tbody>
+      </table>
+    </section>
+
+    <!-- ---- INDICADORES ---- -->
+    <section class="vista" data-vista="indicadores">
+      <div class="encabezado-vista"><h2>Indicadores</h2><p>KPI por proceso, con meta, resultado y semáforo.</p></div>
+      <div class="barra-lista"><span></span><button class="btn-secundario" id="btn-nuevo-indicador">+ Nuevo indicador</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Código</th><th>Nombre</th><th>Meta</th><th>Resultado</th><th>Semáforo</th></tr></thead>
+        <tbody id="tabla-indicadores"></tbody>
+      </table>
+    </section>
+
+    <!-- ---- DOCUMENTOS ---- -->
+    <section class="vista" data-vista="documentos">
+      <div class="encabezado-vista"><h2>Documentos</h2><p>Documentos controlados de gestión, con versión y vigencia.</p></div>
+      <div class="barra-lista"><span></span><button class="btn-secundario" id="btn-nuevo-documento">+ Nuevo documento</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Código</th><th>Nombre</th><th>Versión</th><th>Estado</th><th>Vence</th></tr></thead>
+        <tbody id="tabla-documentos"></tbody>
+      </table>
+    </section>
+  </main>
+</div>
+
+<!-- ===================== MODAL DETALLE PROCESO ===================== -->
+<div class="capa-modal" id="capa-modal-proceso">
+  <div class="modal">
+    <div class="cod" id="detalle-cod"></div>
+    <h3 id="detalle-nombre"></h3>
+    <div class="campo-detalle"><div class="etq">Objetivo</div><div class="val" id="detalle-objetivo"></div></div>
+    <div class="campo-detalle"><div class="etq">Responsable</div><div class="val" id="detalle-responsable"></div></div>
+    <div class="campo-detalle"><div class="etq">Sistemas relacionados</div><div class="val" id="detalle-sistemas"></div></div>
+    <div class="campo-detalle"><div class="etq">Estado</div><div class="val" id="detalle-estado"></div></div>
+    <button class="cerrar" id="btn-cerrar-modal">Cerrar</button>
+  </div>
+</div>
+
+<!-- ===================== FORMULARIOS GENÉRICOS ===================== -->
+<div class="capa-form" id="capa-form">
+  <div class="panel-form">
+    <h3 id="titulo-form">Nuevo</h3>
+    <form id="form-generico"></form>
+  </div>
+</div>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+const SUPABASE_URL = 'https://ngjoognzvehwjtpqwrqe.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_2TQ_piaHlSMHa79zjmOOXg_6bEwgkKD';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  db: { schema: 'sistema_operativo' }
+});
+
+const NOMBRES_CATEGORIA = {
+  estrategico: 'Estratégicos',
+  misional: 'Misionales',
+  apoyo: 'De apoyo',
+  evaluacion_mejora: 'Evaluación y mejora'
+};
+
+let sesionActual = null;
+let cacheProcesos = [];
+
+/* ---------------- LOGIN ---------------- */
+const pantallaLogin = document.getElementById('pantalla-login');
+const appEl = document.getElementById('app');
+const formLogin = document.getElementById('form-login');
+const errorLogin = document.getElementById('error-login');
+const btnLogin = document.getElementById('btn-login');
+
+formLogin.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorLogin.style.display = 'none';
+  btnLogin.disabled = true;
+  btnLogin.textContent = 'Entrando…';
+  const correo = document.getElementById('correo').value.trim();
+  const clave = document.getElementById('clave').value;
+  const { data, error } = await supabase.auth.signInWithPassword({ email: correo, password: clave });
+  btnLogin.disabled = false;
+  btnLogin.textContent = 'Entrar';
+  if (error) {
+    errorLogin.textContent = 'No se pudo iniciar sesión: ' + error.message;
+    errorLogin.style.display = 'block';
+    return;
+  }
+  sesionActual = data.session;
+  mostrarApp();
+});
+
+document.getElementById('btn-salir').addEventListener('click', async () => {
+  await supabase.auth.signOut();
+  location.reload();
+});
+
+async function verificarSesionExistente() {
+  const { data } = await supabase.auth.getSession();
+  if (data.session) {
+    sesionActual = data.session;
+    mostrarApp();
+  }
+}
+
+function mostrarApp() {
+  pantallaLogin.style.display = 'none';
+  appEl.classList.add('visible');
+  document.getElementById('usuario-actual').textContent = sesionActual.user.email;
+  cargarTodo();
+}
+
+/* ---------------- NAVEGACIÓN ---------------- */
+document.querySelectorAll('nav.menu button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav.menu button').forEach(b => b.classList.remove('activo'));
+    btn.classList.add('activo');
+    const vista = btn.dataset.vista;
+    document.querySelectorAll('.vista').forEach(v => v.classList.remove('activa'));
+    document.querySelector('.vista[data-vista="' + vista + '"]').classList.add('activa');
+  });
+});
+
+/* ---------------- CARGA DE DATOS ---------------- */
+async function cargarTodo() {
+  await Promise.all([
+    cargarProcesos(),
+    cargarProyectos(),
+    cargarRiesgos(),
+    cargarTareas(),
+    cargarIndicadores(),
+    cargarDocumentos()
+  ]);
+}
+
+async function cargarProcesos() {
+  const { data, error } = await supabase.from('procesos').select('*').order('codigo');
+  if (error) { console.error(error); return; }
+  cacheProcesos = data || [];
+  pintarMapaProcesos(cacheProcesos);
+  pintarTablaProcesos(cacheProcesos);
+  llenarSelectoresProceso();
+}
+
+function pintarMapaProcesos(procesos) {
+  const cont = document.getElementById('mapa-procesos');
+  cont.innerHTML = '';
+  Object.keys(NOMBRES_CATEGORIA).forEach(cat => {
+    const col = document.createElement('div');
+    col.className = 'columna-categoria';
+    col.dataset.cat = cat;
+    const items = procesos.filter(p => p.categoria === cat);
+    col.innerHTML = `<h3>${NOMBRES_CATEGORIA[cat]}</h3>` + items.map(p => `
+      <button class="tarjeta-proceso ${p.estado === 'reservado' ? 'reservado' : ''}" data-id="${p.id}">
+        <div class="cod">${p.codigo}</div>
+        <div class="nom">${p.nombre}</div>
+        ${p.estado === 'reservado' ? '<span class="badge-reservado">Reservado</span>' : ''}
+      </button>`).join('');
+    cont.appendChild(col);
+  });
+  cont.querySelectorAll('.tarjeta-proceso').forEach(t => {
+    t.addEventListener('click', () => abrirDetalleProceso(t.dataset.id));
+  });
+}
+
+function pintarTablaProcesos(procesos) {
+  const tbody = document.getElementById('tabla-procesos');
+  tbody.innerHTML = procesos.map(p => `
+    <tr>
+      <td class="mono">${p.codigo}</td>
+      <td>${p.nombre}</td>
+      <td>${p.responsable || '—'}</td>
+      <td><span class="pill ${p.estado === 'activo' ? 'cumplida' : 'pendiente'}">${p.estado}</span></td>
+    </tr>`).join('');
+}
+
+function abrirDetalleProceso(id) {
+  const p = cacheProcesos.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('detalle-cod').textContent = p.codigo;
+  document.getElementById('detalle-nombre').textContent = p.nombre;
+  document.getElementById('detalle-objetivo').textContent = p.objetivo || '—';
+  document.getElementById('detalle-responsable').textContent = p.responsable || '—';
+  document.getElementById('detalle-sistemas').textContent = (p.sistemas_relacionados || []).join(', ') || '—';
+  document.getElementById('detalle-estado').textContent = p.estado === 'reservado' ? 'Reservado — se activa cuando la empresa crezca' : 'Activo';
+  document.getElementById('capa-modal-proceso').classList.add('visible');
+}
+document.getElementById('btn-cerrar-modal').addEventListener('click', () => {
+  document.getElementById('capa-modal-proceso').classList.remove('visible');
+});
+
+/* ---------------- KPI / DASHBOARD ---------------- */
+async function cargarIndicadores() {
+  const { data, error } = await supabase.from('indicadores').select('*').order('codigo');
+  if (error) { console.error(error); return; }
+  pintarKpis(data || []);
+  pintarTablaIndicadores(data || []);
+}
+
+function pintarKpis(indicadores) {
+  const grid = document.getElementById('grid-kpi');
+  const vacio = document.getElementById('estado-vacio-kpi');
+  if (!indicadores.length) { grid.innerHTML = ''; vacio.style.display = 'block'; return; }
+  vacio.style.display = 'none';
+  grid.innerHTML = indicadores.map(k => `
+    <div class="kpi ${k.semaforo || 'gris'}">
+      <div class="nombre">${k.nombre}</div>
+      <div class="valor">${k.resultado_actual ?? '—'} ${k.unidad || ''}</div>
+      <div class="meta">Meta: ${k.meta ?? '—'} ${k.unidad || ''}</div>
+    </div>`).join('');
+}
+
+function pintarTablaIndicadores(data) {
+  document.getElementById('tabla-indicadores').innerHTML = data.map(k => `
+    <tr>
+      <td class="mono">${k.codigo}</td>
+      <td>${k.nombre}</td>
+      <td>${k.meta ?? '—'}</td>
+      <td>${k.resultado_actual ?? '—'}</td>
+      <td><span class="pill ${k.semaforo === 'verde' ? 'cumplida' : k.semaforo === 'rojo' ? 'vencida' : 'en_curso'}">${k.semaforo || 'sin definir'}</span></td>
+    </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin indicadores todavía.</td></tr>';
+}
+
+/* ---------------- PROYECTOS ---------------- */
+async function cargarProyectos() {
+  const { data, error } = await supabase.from('proyectos').select('*, procesos(codigo,nombre)').order('creado_en', { ascending: false });
+  if (error) { console.error(error); return; }
+  document.getElementById('tabla-proyectos').innerHTML = (data || []).map(p => `
+    <tr>
+      <td class="mono">${p.codigo}</td>
+      <td>${p.nombre}</td>
+      <td>${p.procesos ? p.procesos.codigo : '—'}</td>
+      <td><span class="pill ${p.estado}">${p.estado}</span></td>
+      <td>${p.avance_pct || 0}%</td>
+    </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin proyectos todavía.</td></tr>';
+}
+
+/* ---------------- RIESGOS ---------------- */
+async function cargarRiesgos() {
+  const { data, error } = await supabase.from('riesgos').select('*').order('creado_en', { ascending: false });
+  if (error) { console.error(error); return; }
+  document.getElementById('tabla-riesgos').innerHTML = (data || []).map(r => `
+    <tr>
+      <td class="mono">${r.codigo}</td>
+      <td>${r.descripcion}</td>
+      <td>${r.probabilidad || '—'}</td>
+      <td>${r.impacto || '—'}</td>
+      <td><span class="pill ${r.estado}">${r.estado}</span></td>
+    </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin riesgos todavía.</td></tr>';
+}
+
+/* ---------------- TAREAS ---------------- */
+async function cargarTareas() {
+  const { data, error } = await supabase.from('tareas').select('*').order('fecha_limite', { ascending: true, nullsFirst: false });
+  if (error) { console.error(error); return; }
+  document.getElementById('tabla-tareas').innerHTML = (data || []).map(t => `
+    <tr>
+      <td class="mono">${t.codigo}</td>
+      <td>${t.titulo}</td>
+      <td>${t.responsable || '—'}</td>
+      <td>${t.fecha_limite || '—'}</td>
+      <td><span class="pill ${t.estado}">${t.estado}</span></td>
+    </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin tareas todavía.</td></tr>';
+}
+
+/* ---------------- DOCUMENTOS ---------------- */
+async function cargarDocumentos() {
+  const { data, error } = await supabase.from('documentos').select('*').order('creado_en', { ascending: false });
+  if (error) { console.error(error); return; }
+  document.getElementById('tabla-documentos').innerHTML = (data || []).map(d => `
+    <tr>
+      <td class="mono">${d.codigo}</td>
+      <td>${d.nombre}</td>
+      <td>${d.version}</td>
+      <td><span class="pill ${d.estado === 'vigente' ? 'cumplida' : 'pendiente'}">${d.estado}</span></td>
+      <td>${d.fecha_vencimiento || '—'}</td>
+    </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin documentos todavía.</td></tr>';
+}
+
+/* ---------------- FORMULARIOS GENÉRICOS (crear) ---------------- */
+const capaForm = document.getElementById('capa-form');
+const tituloForm = document.getElementById('titulo-form');
+const formGenerico = document.getElementById('form-generico');
+
+function selectorProcesoHTML(idCampo) {
+  return `<div class="campo"><label>Proceso relacionado</label><select id="${idCampo}">
+    <option value="">— Ninguno —</option>
+    ${cacheProcesos.map(p => `<option value="${p.id}">${p.codigo} · ${p.nombre}</option>`).join('')}
+  </select></div>`;
+}
+function llenarSelectoresProceso() { /* los selects se regeneran al abrir cada form */ }
+
+function generarCodigo(prefijo) {
+  const año = new Date().getFullYear();
+  const n = String(Math.floor(Math.random() * 900) + 100);
+  return `${prefijo}-${año}-${n}`;
+}
+
+function abrirForm(tipo) {
+  capaForm.classList.add('visible');
+  if (tipo === 'proyecto') {
+    tituloForm.textContent = 'Nuevo proyecto';
+    formGenerico.innerHTML = `
+      <div class="campo"><label>Nombre</label><input type="text" id="f-nombre" required /></div>
+      <div class="campo"><label>Objetivo</label><textarea id="f-objetivo"></textarea></div>
+      <div class="campo"><label>Responsable</label><input type="text" id="f-responsable" /></div>
+      ${selectorProcesoHTML('f-proceso')}
+      <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+    formGenerico.onsubmit = async (e) => {
+      e.preventDefault();
+      await supabase.from('proyectos').insert({
+        codigo: generarCodigo('PRY'),
+        nombre: document.getElementById('f-nombre').value,
+        objetivo: document.getElementById('f-objetivo').value,
+        responsable: document.getElementById('f-responsable').value,
+        proceso_id: document.getElementById('f-proceso').value || null
+      });
+      cerrarForm(); cargarProyectos();
+    };
+  }
+  if (tipo === 'riesgo') {
+    tituloForm.textContent = 'Nuevo riesgo';
+    formGenerico.innerHTML = `
+      <div class="campo"><label>Descripción</label><textarea id="f-descripcion" required></textarea></div>
+      <div class="campo"><label>Probabilidad</label><select id="f-prob"><option value="baja">Baja</option><option value="media">Media</option><option value="alta">Alta</option></select></div>
+      <div class="campo"><label>Impacto</label><select id="f-impacto"><option value="bajo">Bajo</option><option value="medio">Medio</option><option value="alto">Alto</option></select></div>
+      ${selectorProcesoHTML('f-proceso')}
+      <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+    formGenerico.onsubmit = async (e) => {
+      e.preventDefault();
+      await supabase.from('riesgos').insert({
+        codigo: generarCodigo('RSK'),
+        descripcion: document.getElementById('f-descripcion').value,
+        probabilidad: document.getElementById('f-prob').value,
+        impacto: document.getElementById('f-impacto').value,
+        proceso_id: document.getElementById('f-proceso').value || null
+      });
+      cerrarForm(); cargarRiesgos();
+    };
+  }
+  if (tipo === 'tarea') {
+    tituloForm.textContent = 'Nueva tarea';
+    formGenerico.innerHTML = `
+      <div class="campo"><label>Título</label><input type="text" id="f-titulo" required /></div>
+      <div class="campo"><label>Responsable</label><input type="text" id="f-responsable" /></div>
+      <div class="campo"><label>Fecha límite</label><input type="date" id="f-fecha" /></div>
+      ${selectorProcesoHTML('f-proceso')}
+      <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+    formGenerico.onsubmit = async (e) => {
+      e.preventDefault();
+      await supabase.from('tareas').insert({
+        codigo: generarCodigo('ACT'),
+        titulo: document.getElementById('f-titulo').value,
+        responsable: document.getElementById('f-responsable').value,
+        fecha_limite: document.getElementById('f-fecha').value || null,
+        proceso_id: document.getElementById('f-proceso').value || null
+      });
+      cerrarForm(); cargarTareas();
+    };
+  }
+  if (tipo === 'indicador') {
+    tituloForm.textContent = 'Nuevo indicador';
+    formGenerico.innerHTML = `
+      <div class="campo"><label>Nombre</label><input type="text" id="f-nombre" required /></div>
+      <div class="campo"><label>Meta</label><input type="number" step="any" id="f-meta" /></div>
+      <div class="campo"><label>Resultado actual</label><input type="number" step="any" id="f-resultado" /></div>
+      <div class="campo"><label>Unidad</label><input type="text" id="f-unidad" placeholder="%, COP, unidades..." /></div>
+      <div class="campo"><label>Semáforo</label><select id="f-semaforo"><option value="verde">Verde</option><option value="amarillo">Amarillo</option><option value="rojo">Rojo</option></select></div>
+      ${selectorProcesoHTML('f-proceso')}
+      <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+    formGenerico.onsubmit = async (e) => {
+      e.preventDefault();
+      await supabase.from('indicadores').insert({
+        codigo: generarCodigo('KPI'),
+        nombre: document.getElementById('f-nombre').value,
+        meta: document.getElementById('f-meta').value || null,
+        resultado_actual: document.getElementById('f-resultado').value || null,
+        unidad: document.getElementById('f-unidad').value,
+        semaforo: document.getElementById('f-semaforo').value,
+        proceso_id: document.getElementById('f-proceso').value || null
+      });
+      cerrarForm(); cargarIndicadores();
+    };
+  }
+  if (tipo === 'documento') {
+    tituloForm.textContent = 'Nuevo documento';
+    formGenerico.innerHTML = `
+      <div class="campo"><label>Nombre</label><input type="text" id="f-nombre" required /></div>
+      <div class="campo"><label>Versión</label><input type="text" id="f-version" value="1.0" /></div>
+      <div class="campo"><label>Responsable</label><input type="text" id="f-responsable" /></div>
+      <div class="campo"><label>Fecha de vencimiento</label><input type="date" id="f-vencimiento" /></div>
+      ${selectorProcesoHTML('f-proceso')}
+      <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+    formGenerico.onsubmit = async (e) => {
+      e.preventDefault();
+      await supabase.from('documentos').insert({
+        codigo: generarCodigo('DOC'),
+        nombre: document.getElementById('f-nombre').value,
+        version: document.getElementById('f-version').value || '1.0',
+        responsable: document.getElementById('f-responsable').value,
+        fecha_vencimiento: document.getElementById('f-vencimiento').value || null,
+        proceso_id: document.getElementById('f-proceso').value || null
+      });
+      cerrarForm(); cargarDocumentos();
+    };
+  }
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+function cerrarForm() { capaForm.classList.remove('visible'); }
+
+document.getElementById('btn-nuevo-proyecto').addEventListener('click', () => abrirForm('proyecto'));
+document.getElementById('btn-nuevo-riesgo').addEventListener('click', () => abrirForm('riesgo'));
+document.getElementById('btn-nueva-tarea').addEventListener('click', () => abrirForm('tarea'));
+document.getElementById('btn-nuevo-indicador').addEventListener('click', () => abrirForm('indicador'));
+document.getElementById('btn-nuevo-documento').addEventListener('click', () => abrirForm('documento'));
+
+verificarSesionExistente();
+</script>
+</body>
+</html>
