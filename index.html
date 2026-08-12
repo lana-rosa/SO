@@ -127,6 +127,23 @@
   .kpi .valor{font-size:24px;font-weight:700;}
   .kpi .meta{font-size:11.5px;color:var(--tinta-suave);margin-top:2px;}
 
+  .grid-erp{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin:24px 0 30px;}
+  .panel-erp{background:#fff;border:1px solid var(--borde);border-radius:var(--radio);padding:18px 20px;}
+  .panel-erp h3{font-size:14px;margin:0 0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .panel-erp .refrescando{font-size:11px;color:var(--tinta-suave);font-weight:400;}
+  .fila-metrica{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-top:1px solid var(--borde);font-size:13px;}
+  .fila-metrica:first-of-type{border-top:none;}
+  .fila-metrica .etq{color:var(--tinta-suave);}
+  .fila-metrica .val{font-weight:700;font-family:'IBM Plex Mono',monospace;}
+  .val.pos{color:var(--verde);} .val.neg{color:var(--rojo);}
+  .lista-alerta{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;}
+  .lista-alerta li{font-size:12.5px;padding:8px 10px;border-radius:8px;border-left:3px solid var(--borde);background:var(--blanco-hueso);}
+  .lista-alerta li.urgente{border-color:var(--rojo);background:#fbecee;}
+  .lista-alerta li.atencion{border-color:var(--ambar);background:#fcf3e3;}
+  .lista-alerta li.info{border-color:var(--verde);background:#eaf4ef;}
+  .panel-erp .vacio-mini{font-size:12.5px;color:var(--tinta-suave);}
+  .panel-erp .error-mini{font-size:12.5px;color:var(--rojo);}
+
   .estado-vacio{
     background:#fff;border:1px dashed var(--borde);border-radius:var(--radio);
     padding:26px;text-align:center;color:var(--tinta-suave);font-size:13.5px;margin-bottom:30px;
@@ -262,6 +279,17 @@
         </div>
       </div>
 
+      <div class="encabezado-vista" style="margin-top:8px;">
+        <h3 style="margin:0;font-size:16px;">Resumen del negocio <span class="refrescando" id="erp-generado-en" style="font-size:11px;font-weight:400;color:var(--tinta-suave);"></span></h3>
+      </div>
+      <div class="grid-erp" id="grid-erp">
+        <div class="panel-erp"><h3>Flujo de caja (30 días)</h3><div id="erp-flujo" class="vacio-mini">Cargando…</div></div>
+        <div class="panel-erp"><h3>Ventas del período</h3><div id="erp-ventas" class="vacio-mini">Cargando…</div></div>
+        <div class="panel-erp"><h3>Alertas activas</h3><div id="erp-alertas" class="vacio-mini">Cargando…</div></div>
+        <div class="panel-erp"><h3>Fondo Emprender</h3><div id="erp-fondo" class="vacio-mini">Cargando…</div></div>
+        <div class="panel-erp"><h3>Inventario crítico</h3><div id="erp-inventario" class="vacio-mini">Cargando…</div></div>
+      </div>
+
       <div id="grid-kpi" class="grid-kpi"></div>
       <div id="estado-vacio-kpi" class="estado-vacio" style="display:none;">
         Todavía no hay indicadores registrados. Se crean desde la pestaña <strong>Indicadores</strong>, uno por proceso.
@@ -361,6 +389,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const SUPABASE_URL = 'https://ngjoognzvehwjtpqwrqe.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_2TQ_piaHlSMHa79zjmOOXg_6bEwgkKD';
+const ERP_API_URL = 'https://lana-rosa-os-pos.saralmunoz1301.workers.dev';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   db: { schema: 'sistema_operativo' }
@@ -441,8 +470,106 @@ async function cargarTodo() {
     cargarRiesgos(),
     cargarTareas(),
     cargarIndicadores(),
-    cargarDocumentos()
+    cargarDocumentos(),
+    cargarResumenErp()
   ]);
+}
+
+/* ---------------- RESUMEN DEL NEGOCIO (datos reales del ERP) ---------------- */
+function formatoCOP(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return '$' + Math.round(n).toLocaleString('es-CO');
+}
+
+async function erpFetch(ruta) {
+  const resp = await fetch(ERP_API_URL + ruta, {
+    headers: { Authorization: 'Bearer ' + sesionActual.access_token }
+  });
+  const datos = await resp.json().catch(() => null);
+  if (!resp.ok) throw new Error((datos && datos.error) || 'No se pudo cargar');
+  return datos;
+}
+
+async function cargarResumenErp() {
+  document.getElementById('erp-generado-en').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+  await Promise.all([
+    cargarFlujoErp(),
+    cargarVentasErp(),
+    cargarAlertasErp(),
+    cargarFondoErp(),
+    cargarInventarioErp()
+  ]);
+}
+
+async function cargarFlujoErp() {
+  const cont = document.getElementById('erp-flujo');
+  try {
+    const { flujo_caja_30_dias: f } = await erpFetch('/api/pos/so/resumen-financiero');
+    if (!f) { cont.innerHTML = '<div class="vacio-mini">Sin datos de flujo de caja.</div>'; return; }
+    cont.innerHTML = `
+      <div class="fila-metrica"><span class="etq">Entradas</span><span class="val pos">${formatoCOP(f.total_entradas)}</span></div>
+      <div class="fila-metrica"><span class="etq">Salidas</span><span class="val neg">${formatoCOP(f.total_salidas)}</span></div>
+      <div class="fila-metrica"><span class="etq">Flujo neto</span><span class="val ${f.flujo_neto >= 0 ? 'pos' : 'neg'}">${formatoCOP(f.flujo_neto)}</span></div>`;
+  } catch (e) { cont.innerHTML = '<div class="error-mini">No se pudo cargar: ' + e.message + '</div>'; }
+}
+
+async function cargarVentasErp() {
+  const cont = document.getElementById('erp-ventas');
+  try {
+    const { ventas } = await erpFetch('/api/pos/so/resumen-financiero');
+    if (!ventas || typeof ventas !== 'object') { cont.innerHTML = '<div class="vacio-mini">Sin datos de ventas.</div>'; return; }
+    const filas = Object.entries(ventas)
+      .filter(([, v]) => typeof v === 'number' || typeof v === 'string')
+      .slice(0, 6)
+      .map(([k, v]) => `<div class="fila-metrica"><span class="etq">${k.replace(/_/g, ' ')}</span><span class="val">${typeof v === 'number' ? formatoCOP(v) : v}</span></div>`)
+      .join('');
+    cont.innerHTML = filas || '<div class="vacio-mini">Sin datos de ventas.</div>';
+  } catch (e) { cont.innerHTML = '<div class="error-mini">No se pudo cargar: ' + e.message + '</div>'; }
+}
+
+async function cargarAlertasErp() {
+  const cont = document.getElementById('erp-alertas');
+  try {
+    const { alertas } = await erpFetch('/api/pos/so/alertas-activas');
+    if (!alertas || !alertas.length) { cont.innerHTML = '<div class="vacio-mini">Sin alertas por ahora.</div>'; return; }
+    cont.innerHTML = '<ul class="lista-alerta">' + alertas.map(a =>
+      `<li class="${a.severidad || 'info'}">${a.mensaje}</li>`
+    ).join('') + '</ul>';
+  } catch (e) { cont.innerHTML = '<div class="error-mini">No se pudo cargar: ' + e.message + '</div>'; }
+}
+
+async function cargarFondoErp() {
+  const cont = document.getElementById('erp-fondo');
+  try {
+    const { saldo, proximos_hitos } = await erpFetch('/api/pos/so/fondo-emprender');
+    let html = '';
+    if (saldo && typeof saldo === 'object') {
+      const filasSaldo = Object.entries(saldo)
+        .filter(([, v]) => typeof v === 'number')
+        .slice(0, 3)
+        .map(([k, v]) => `<div class="fila-metrica"><span class="etq">${k.replace(/_/g, ' ')}</span><span class="val">${formatoCOP(v)}</span></div>`)
+        .join('');
+      html += filasSaldo;
+    }
+    if (proximos_hitos && proximos_hitos.length) {
+      html += '<ul class="lista-alerta" style="margin-top:8px;">' + proximos_hitos.slice(0, 4).map(h =>
+        `<li class="${h.dias_restantes <= 7 ? 'urgente' : h.dias_restantes <= 20 ? 'atencion' : 'info'}">${h.nombre || h.descripcion || 'Hito'} — ${h.dias_restantes} día(s)</li>`
+      ).join('') + '</ul>';
+    }
+    cont.innerHTML = html || '<div class="vacio-mini">Sin datos de Fondo Emprender todavía.</div>';
+  } catch (e) { cont.innerHTML = '<div class="error-mini">No se pudo cargar: ' + e.message + '</div>'; }
+}
+
+async function cargarInventarioErp() {
+  const cont = document.getElementById('erp-inventario');
+  try {
+    const { items_stock_bajo, total_alertas } = await erpFetch('/api/pos/so/inventario-critico');
+    if (!items_stock_bajo || !items_stock_bajo.length) { cont.innerHTML = '<div class="vacio-mini">Sin ítems en stock crítico. ✓</div>'; return; }
+    cont.innerHTML = `<div class="fila-metrica"><span class="etq">Ítems bajo mínimo</span><span class="val neg">${total_alertas}</span></div>` +
+      '<ul class="lista-alerta" style="margin-top:8px;">' + items_stock_bajo.slice(0, 5).map(i =>
+        `<li class="atencion">${i.nombre} — stock ${i.stock_actual} (mín. ${i.stock_minimo})</li>`
+      ).join('') + '</ul>';
+  } catch (e) { cont.innerHTML = '<div class="error-mini">No se pudo cargar: ' + e.message + '</div>'; }
 }
 
 async function cargarProcesos() {
