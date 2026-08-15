@@ -279,8 +279,9 @@
         </div>
       </div>
 
-      <div class="encabezado-vista" style="margin-top:8px;">
-        <h3 style="margin:0;font-size:16px;">Resumen del negocio <span class="refrescando" id="erp-generado-en" style="font-size:11px;font-weight:400;color:var(--tinta-suave);"></span></h3>
+      <div class="encabezado-vista" style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <h3 style="margin:0;font-size:16px;">Resumen del negocio <span id="erp-generado-en" style="font-size:11px;font-weight:400;color:var(--tinta-suave);"></span></h3>
+        <button id="btn-actualizar-resumen" class="btn-secundario" style="font-size:12px;padding:6px 12px;">Actualizar ahora</button>
       </div>
       <div class="grid-erp" id="grid-erp">
         <div class="panel-erp"><h3>Flujo de caja (30 días)</h3><div id="erp-flujo" class="vacio-mini">Cargando…</div></div>
@@ -475,7 +476,7 @@ async function cargarTodo() {
   ]);
 }
 
-/* ---------------- RESUMEN DEL NEGOCIO (datos reales del ERP) ---------------- */
+/* ---------------- RESUMEN DEL NEGOCIO (caché del SO + datos en vivo del ERP) ---------------- */
 function formatoCOP(n) {
   if (n === null || n === undefined || isNaN(n)) return '—';
   return '$' + Math.round(n).toLocaleString('es-CO');
@@ -490,86 +491,108 @@ async function erpFetch(ruta) {
   return datos;
 }
 
-async function cargarResumenErp() {
-  document.getElementById('erp-generado-en').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-  await Promise.all([
-    cargarFlujoErp(),
-    cargarVentasErp(),
-    cargarAlertasErp(),
-    cargarFondoErp(),
-    cargarInventarioErp()
-  ]);
-}
-
-async function cargarFlujoErp() {
+function pintarFlujo(f) {
   const cont = document.getElementById('erp-flujo');
-  try {
-    const { flujo_caja_30_dias: f } = await erpFetch('/api/pos/so/resumen-financiero');
-    if (!f) { cont.innerHTML = '<div class="vacio-mini">Sin datos de flujo de caja.</div>'; return; }
-    cont.innerHTML = `
-      <div class="fila-metrica"><span class="etq">Entradas</span><span class="val pos">${formatoCOP(f.total_entradas)}</span></div>
-      <div class="fila-metrica"><span class="etq">Salidas</span><span class="val neg">${formatoCOP(f.total_salidas)}</span></div>
-      <div class="fila-metrica"><span class="etq">Flujo neto</span><span class="val ${f.flujo_neto >= 0 ? 'pos' : 'neg'}">${formatoCOP(f.flujo_neto)}</span></div>`;
-  } catch (e) { cont.innerHTML = '<div class="error-mini">No se pudo cargar: ' + e.message + '</div>'; }
+  if (!f) { cont.innerHTML = '<div class="vacio-mini">Sin datos de flujo de caja.</div>'; return; }
+  cont.innerHTML = `
+    <div class="fila-metrica"><span class="etq">Entradas</span><span class="val pos">${formatoCOP(f.total_entradas)}</span></div>
+    <div class="fila-metrica"><span class="etq">Salidas</span><span class="val neg">${formatoCOP(f.total_salidas)}</span></div>
+    <div class="fila-metrica"><span class="etq">Flujo neto</span><span class="val ${f.flujo_neto >= 0 ? 'pos' : 'neg'}">${formatoCOP(f.flujo_neto)}</span></div>`;
 }
 
-async function cargarVentasErp() {
+function pintarVentas(ventas) {
   const cont = document.getElementById('erp-ventas');
-  try {
-    const { ventas } = await erpFetch('/api/pos/so/resumen-financiero');
-    if (!ventas || typeof ventas !== 'object') { cont.innerHTML = '<div class="vacio-mini">Sin datos de ventas.</div>'; return; }
-    const filas = Object.entries(ventas)
-      .filter(([, v]) => typeof v === 'number' || typeof v === 'string')
-      .slice(0, 6)
-      .map(([k, v]) => `<div class="fila-metrica"><span class="etq">${k.replace(/_/g, ' ')}</span><span class="val">${typeof v === 'number' ? formatoCOP(v) : v}</span></div>`)
-      .join('');
-    cont.innerHTML = filas || '<div class="vacio-mini">Sin datos de ventas.</div>';
-  } catch (e) { cont.innerHTML = '<div class="error-mini">No se pudo cargar: ' + e.message + '</div>'; }
+  if (!ventas || typeof ventas !== 'object') { cont.innerHTML = '<div class="vacio-mini">Sin datos de ventas.</div>'; return; }
+  const filas = Object.entries(ventas)
+    .filter(([, v]) => typeof v === 'number' || typeof v === 'string')
+    .slice(0, 6)
+    .map(([k, v]) => `<div class="fila-metrica"><span class="etq">${k.replace(/_/g, ' ')}</span><span class="val">${typeof v === 'number' ? formatoCOP(v) : v}</span></div>`)
+    .join('');
+  cont.innerHTML = filas || '<div class="vacio-mini">Sin datos de ventas.</div>';
 }
 
-async function cargarAlertasErp() {
+function pintarAlertas(alertas) {
   const cont = document.getElementById('erp-alertas');
-  try {
-    const { alertas } = await erpFetch('/api/pos/so/alertas-activas');
-    if (!alertas || !alertas.length) { cont.innerHTML = '<div class="vacio-mini">Sin alertas por ahora.</div>'; return; }
-    cont.innerHTML = '<ul class="lista-alerta">' + alertas.map(a =>
-      `<li class="${a.severidad || 'info'}">${a.mensaje}</li>`
-    ).join('') + '</ul>';
-  } catch (e) { cont.innerHTML = '<div class="error-mini">No se pudo cargar: ' + e.message + '</div>'; }
+  if (!alertas || !alertas.length) { cont.innerHTML = '<div class="vacio-mini">Sin alertas por ahora.</div>'; return; }
+  cont.innerHTML = '<ul class="lista-alerta">' + alertas.map(a =>
+    `<li class="${a.severidad || 'info'}">${a.mensaje}</li>`
+  ).join('') + '</ul>';
 }
 
-async function cargarFondoErp() {
+function pintarFondo(saldo, proximos_hitos) {
   const cont = document.getElementById('erp-fondo');
-  try {
-    const { saldo, proximos_hitos } = await erpFetch('/api/pos/so/fondo-emprender');
-    let html = '';
-    if (saldo && typeof saldo === 'object') {
-      const filasSaldo = Object.entries(saldo)
-        .filter(([, v]) => typeof v === 'number')
-        .slice(0, 3)
-        .map(([k, v]) => `<div class="fila-metrica"><span class="etq">${k.replace(/_/g, ' ')}</span><span class="val">${formatoCOP(v)}</span></div>`)
-        .join('');
-      html += filasSaldo;
-    }
-    if (proximos_hitos && proximos_hitos.length) {
-      html += '<ul class="lista-alerta" style="margin-top:8px;">' + proximos_hitos.slice(0, 4).map(h =>
-        `<li class="${h.dias_restantes <= 7 ? 'urgente' : h.dias_restantes <= 20 ? 'atencion' : 'info'}">${h.nombre || h.descripcion || 'Hito'} — ${h.dias_restantes} día(s)</li>`
-      ).join('') + '</ul>';
-    }
-    cont.innerHTML = html || '<div class="vacio-mini">Sin datos de Fondo Emprender todavía.</div>';
-  } catch (e) { cont.innerHTML = '<div class="error-mini">No se pudo cargar: ' + e.message + '</div>'; }
+  let html = '';
+  if (saldo && typeof saldo === 'object') {
+    html += Object.entries(saldo)
+      .filter(([, v]) => typeof v === 'number')
+      .slice(0, 3)
+      .map(([k, v]) => `<div class="fila-metrica"><span class="etq">${k.replace(/_/g, ' ')}</span><span class="val">${formatoCOP(v)}</span></div>`)
+      .join('');
+  }
+  if (proximos_hitos && proximos_hitos.length) {
+    html += '<ul class="lista-alerta" style="margin-top:8px;">' + proximos_hitos.slice(0, 4).map(h =>
+      `<li class="${h.dias_restantes <= 7 ? 'urgente' : h.dias_restantes <= 20 ? 'atencion' : 'info'}">${h.nombre || h.descripcion || 'Hito'} — ${h.dias_restantes} día(s)</li>`
+    ).join('') + '</ul>';
+  }
+  cont.innerHTML = html || '<div class="vacio-mini">Sin datos de Fondo Emprender todavía.</div>';
 }
 
-async function cargarInventarioErp() {
+function pintarInventario(items_stock_bajo, total_alertas) {
   const cont = document.getElementById('erp-inventario');
+  if (!items_stock_bajo || !items_stock_bajo.length) { cont.innerHTML = '<div class="vacio-mini">Sin ítems en stock crítico. ✓</div>'; return; }
+  cont.innerHTML = `<div class="fila-metrica"><span class="etq">Ítems bajo mínimo</span><span class="val neg">${total_alertas}</span></div>` +
+    '<ul class="lista-alerta" style="margin-top:8px;">' + items_stock_bajo.slice(0, 5).map(i =>
+      `<li class="atencion">${i.nombre} — stock ${i.stock_actual} (mín. ${i.stock_minimo})</li>`
+    ).join('') + '</ul>';
+}
+
+function pintarTodoDesdeResumen(r) {
+  pintarFlujo(r.resumen_financiero ? r.resumen_financiero.flujo_caja_30_dias : null);
+  pintarVentas(r.resumen_financiero ? r.resumen_financiero.ventas : null);
+  pintarAlertas(r.alertas_activas ? r.alertas_activas.alertas : null);
+  pintarFondo(r.fondo_emprender ? r.fondo_emprender.saldo : null, r.fondo_emprender ? r.fondo_emprender.proximos_hitos : null);
+  pintarInventario(r.inventario_critico ? r.inventario_critico.items_stock_bajo : null, r.inventario_critico ? r.inventario_critico.total_alertas : null);
+}
+
+function marcarEstadoResumen(texto) {
+  document.getElementById('erp-generado-en').textContent = texto;
+}
+
+// Intenta primero la caché (rápida, se refresca sola cada hora en el ERP).
+// Si no hay caché o está muy vieja (más de 3 horas), trae los datos en vivo.
+async function cargarResumenErp() {
+  marcarEstadoResumen('Cargando…');
   try {
-    const { items_stock_bajo, total_alertas } = await erpFetch('/api/pos/so/inventario-critico');
-    if (!items_stock_bajo || !items_stock_bajo.length) { cont.innerHTML = '<div class="vacio-mini">Sin ítems en stock crítico. ✓</div>'; return; }
-    cont.innerHTML = `<div class="fila-metrica"><span class="etq">Ítems bajo mínimo</span><span class="val neg">${total_alertas}</span></div>` +
-      '<ul class="lista-alerta" style="margin-top:8px;">' + items_stock_bajo.slice(0, 5).map(i =>
-        `<li class="atencion">${i.nombre} — stock ${i.stock_actual} (mín. ${i.stock_minimo})</li>`
-      ).join('') + '</ul>';
-  } catch (e) { cont.innerHTML = '<div class="error-mini">No se pudo cargar: ' + e.message + '</div>'; }
+    const { data, error } = await supabase.from('cache_resumen_negocio').select('*').eq('id', 'principal').maybeSingle();
+    if (error) throw error;
+    if (data) {
+      pintarTodoDesdeResumen(data);
+      const edadMin = (Date.now() - new Date(data.actualizado_en).getTime()) / 60000;
+      marcarEstadoResumen('Actualizado ' + new Date(data.actualizado_en).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) + (edadMin > 90 ? ' (puede estar desactualizado)' : ''));
+      if (edadMin <= 180) return; // caché suficientemente fresca, no golpeamos el ERP en vivo
+    }
+  } catch (e) {
+    console.warn('No se pudo leer la caché del SO, se intenta en vivo:', e);
+  }
+  await actualizarResumenEnVivo();
+}
+
+// Fuerza traer los datos directo del ERP (botón "Actualizar ahora" o caché vieja/ausente).
+async function actualizarResumenEnVivo() {
+  marcarEstadoResumen('Actualizando en vivo…');
+  const resultados = await Promise.allSettled([
+    erpFetch('/api/pos/so/resumen-financiero'),
+    erpFetch('/api/pos/so/alertas-activas'),
+    erpFetch('/api/pos/so/fondo-emprender'),
+    erpFetch('/api/pos/so/inventario-critico'),
+  ]);
+  const [resumenFin, alertas, fondo, inventario] = resultados.map(r => r.status === 'fulfilled' ? r.value : null);
+  pintarFlujo(resumenFin ? resumenFin.flujo_caja_30_dias : null);
+  pintarVentas(resumenFin ? resumenFin.ventas : null);
+  pintarAlertas(alertas ? alertas.alertas : null);
+  pintarFondo(fondo ? fondo.saldo : null, fondo ? fondo.proximos_hitos : null);
+  pintarInventario(inventario ? inventario.items_stock_bajo : null, inventario ? inventario.total_alertas : null);
+  marcarEstadoResumen('Actualizado ' + new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) + ' (en vivo)');
 }
 
 async function cargarProcesos() {
@@ -848,6 +871,13 @@ function abrirForm(tipo) {
 function cerrarForm() { capaForm.classList.remove('visible'); }
 
 document.getElementById('btn-nuevo-proyecto').addEventListener('click', () => abrirForm('proyecto'));
+document.getElementById('btn-actualizar-resumen').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  e.target.textContent = 'Actualizando…';
+  await actualizarResumenEnVivo();
+  e.target.disabled = false;
+  e.target.textContent = 'Actualizar ahora';
+});
 document.getElementById('btn-nuevo-riesgo').addEventListener('click', () => abrirForm('riesgo'));
 document.getElementById('btn-nueva-tarea').addEventListener('click', () => abrirForm('tarea'));
 document.getElementById('btn-nuevo-indicador').addEventListener('click', () => abrirForm('indicador'));
