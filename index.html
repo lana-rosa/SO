@@ -491,6 +491,17 @@ async function erpFetch(ruta) {
   return datos;
 }
 
+async function sincronizarTareaConCalendario(tareaId, accion) {
+  const resp = await fetch(ERP_API_URL + '/api/pos/so/tareas/sincronizar-calendario', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sesionActual.access_token },
+    body: JSON.stringify({ tarea_id: tareaId, accion: accion || 'guardar' })
+  });
+  const datos = await resp.json().catch(() => null);
+  if (!resp.ok) throw new Error((datos && datos.error) || 'No se pudo sincronizar con el calendario');
+  return datos;
+}
+
 function pintarFlujo(f) {
   const cont = document.getElementById('erp-flujo');
   if (!f) { cont.innerHTML = '<div class="vacio-mini">Sin datos de flujo de caja.</div>'; return; }
@@ -810,14 +821,18 @@ function abrirForm(tipo) {
       <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
     formGenerico.onsubmit = async (e) => {
       e.preventDefault();
-      await supabase.from('tareas').insert({
+      const fechaLimite = document.getElementById('f-fecha').value || null;
+      const { data, error } = await supabase.from('tareas').insert({
         codigo: generarCodigo('ACT'),
         titulo: document.getElementById('f-titulo').value,
         responsable: document.getElementById('f-responsable').value,
-        fecha_limite: document.getElementById('f-fecha').value || null,
+        fecha_limite: fechaLimite,
         proceso_id: document.getElementById('f-proceso').value || null
-      });
+      }).select().single();
       cerrarForm(); cargarTareas();
+      if (!error && data && fechaLimite) {
+        sincronizarTareaConCalendario(data.id).catch(err => console.warn('No se pudo publicar la tarea en el calendario:', err));
+      }
     };
   }
   if (tipo === 'indicador') {
