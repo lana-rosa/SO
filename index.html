@@ -196,6 +196,10 @@
   .pill.en_curso, .pill.en_tratamiento{background:#fff3e0;color:var(--ambar);}
   .pill.cumplida, .pill.mitigado, .pill.cerrado{background:#e6f4ef;color:var(--verde);}
   .pill.vencida{background:#fbe9e9;color:var(--rojo);}
+  .pill.cancelada{background:var(--blanco-hueso);color:var(--tinta-suave);text-decoration:line-through;}
+  select.select-estado{border:1px solid var(--borde);border-radius:20px;font-size:11px;font-weight:600;padding:3px 8px;background:#fff;color:var(--tinta);cursor:pointer;}
+  .btn-editar-fila{border:none;background:transparent;cursor:pointer;font-size:14px;color:var(--tinta-suave);padding:4px 8px;border-radius:6px;}
+  .btn-editar-fila:hover{background:var(--rosa-suave);color:var(--rosa-fuerte);}
 
   /* ---------- FORM FLOTANTE ---------- */
   .capa-form{display:none;position:fixed;inset:0;background:rgba(43,36,48,0.4);align-items:flex-start;justify-content:center;padding:6vh 20px;z-index:60;overflow:auto;}
@@ -337,7 +341,7 @@
       <div class="encabezado-vista"><h2>Tareas</h2><p>Acciones, entregables y seguimientos con responsable y fecha.</p></div>
       <div class="barra-lista"><span></span><button class="btn-secundario" id="btn-nueva-tarea">+ Nueva tarea</button></div>
       <table class="tabla-simple">
-        <thead><tr><th>Código</th><th>Título</th><th>Responsable</th><th>Fecha límite</th><th>Estado</th></tr></thead>
+        <thead><tr><th>Código</th><th>Título</th><th>Responsable</th><th>Fecha límite</th><th>Estado</th><th></th></tr></thead>
         <tbody id="tabla-tareas"></tbody>
       </table>
     </section>
@@ -405,6 +409,7 @@ const NOMBRES_CATEGORIA = {
 
 let sesionActual = null;
 let cacheProcesos = [];
+let cacheTareas = [];
 
 /* ---------------- LOGIN ---------------- */
 const pantallaLogin = document.getElementById('pantalla-login');
@@ -726,14 +731,75 @@ async function cargarRiesgos() {
 async function cargarTareas() {
   const { data, error } = await supabase.from('tareas').select('*').order('fecha_limite', { ascending: true, nullsFirst: false });
   if (error) { console.error(error); return; }
-  document.getElementById('tabla-tareas').innerHTML = (data || []).map(t => `
+  cacheTareas = data || [];
+  const cont = document.getElementById('tabla-tareas');
+  cont.innerHTML = cacheTareas.map(t => `
     <tr>
       <td class="mono">${t.codigo}</td>
       <td>${t.titulo}</td>
       <td>${t.responsable || '—'}</td>
       <td>${t.fecha_limite || '—'}</td>
-      <td><span class="pill ${t.estado}">${t.estado}</span></td>
-    </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin tareas todavía.</td></tr>';
+      <td>
+        <select class="select-estado pill ${t.estado}" data-id="${t.id}">
+          ${['pendiente','en_curso','cumplida','vencida','cancelada'].map(e => `<option value="${e}" ${t.estado === e ? 'selected' : ''}>${e.replace('_',' ')}</option>`).join('')}
+        </select>
+      </td>
+      <td><button type="button" class="btn-editar-fila" data-id="${t.id}" title="Editar">✎</button></td>
+    </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin tareas todavía.</td></tr>';
+
+  cont.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', () => cambiarEstadoTarea(sel.dataset.id, sel.value));
+  });
+  cont.querySelectorAll('.btn-editar-fila').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormEditarTarea(btn.dataset.id));
+  });
+}
+
+async function cambiarEstadoTarea(id, nuevoEstado) {
+  await supabase.from('tareas').update({ estado: nuevoEstado }).eq('id', id);
+  const tarea = cacheTareas.find(t => t.id === id);
+  try {
+    if (nuevoEstado === 'cumplida' || nuevoEstado === 'cancelada') {
+      await sincronizarTareaConCalendario(id, 'eliminar');
+    } else if (tarea && tarea.fecha_limite) {
+      await sincronizarTareaConCalendario(id, 'guardar');
+    }
+  } catch (e) { console.warn('No se pudo sincronizar el calendario tras el cambio de estado:', e); }
+  await cargarTareas();
+}
+
+function abrirFormEditarTarea(id) {
+  const t = cacheTareas.find(x => x.id === id);
+  if (!t) return;
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Editar tarea';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Título</label><input type="text" id="f-titulo" required value="${(t.titulo || '').replace(/"/g,'&quot;')}" /></div>
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable" value="${(t.responsable || '').replace(/"/g,'&quot;')}" /></div>
+    <div class="campo"><label>Fecha límite</label><input type="date" id="f-fecha" value="${t.fecha_limite || ''}" /></div>
+    ${selectorProcesoHTML('f-proceso')}
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar cambios</button></div>`;
+  document.getElementById('f-proceso').value = t.proceso_id || '';
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const fechaNueva = document.getElementById('f-fecha').value || null;
+    const teniaFecha = !!t.fecha_limite;
+    await supabase.from('tareas').update({
+      titulo: document.getElementById('f-titulo').value,
+      responsable: document.getElementById('f-responsable').value,
+      fecha_limite: fechaNueva,
+      proceso_id: document.getElementById('f-proceso').value || null
+    }).eq('id', id);
+    cerrarForm(); cargarTareas();
+    try {
+      if (fechaNueva) {
+        await sincronizarTareaConCalendario(id, 'guardar');
+      } else if (teniaFecha) {
+        await sincronizarTareaConCalendario(id, 'eliminar');
+      }
+    } catch (err) { console.warn('No se pudo sincronizar el calendario:', err); }
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
 
 /* ---------------- DOCUMENTOS ---------------- */
