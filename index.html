@@ -200,6 +200,8 @@
   select.select-estado{border:1px solid var(--borde);border-radius:20px;font-size:11px;font-weight:600;padding:3px 8px;background:#fff;color:var(--tinta);cursor:pointer;}
   .btn-editar-fila{border:none;background:transparent;cursor:pointer;font-size:14px;color:var(--tinta-suave);padding:4px 8px;border-radius:6px;}
   .btn-editar-fila:hover{background:var(--rosa-suave);color:var(--rosa-fuerte);}
+  .enlace-evidencia{color:var(--rosa-fuerte);font-weight:600;text-decoration:none;font-size:13px;}
+  .enlace-evidencia:hover{text-decoration:underline;}
 
   /* ---------- FORM FLOTANTE ---------- */
   .capa-form{display:none;position:fixed;inset:0;background:rgba(43,36,48,0.4);align-items:flex-start;justify-content:center;padding:6vh 20px;z-index:60;overflow:auto;}
@@ -248,6 +250,7 @@
       <button data-vista="tareas"><span class="ico">✓</span> Tareas</button>
       <button data-vista="indicadores"><span class="ico">%</span> Indicadores</button>
       <button data-vista="documentos"><span class="ico">▭</span> Documentos</button>
+      <button data-vista="evidencias"><span class="ico">📎</span> Evidencias</button>
     </nav>
     <div class="pie-sidebar">
       <div class="usuario" id="usuario-actual">—</div>
@@ -365,6 +368,16 @@
         <tbody id="tabla-documentos"></tbody>
       </table>
     </section>
+
+    <!-- ---- EVIDENCIAS ---- -->
+    <section class="vista" data-vista="evidencias">
+      <div class="encabezado-vista"><h2>Evidencias</h2><p>Enlaces de respaldo (fotos, capturas, archivos) vinculados a una tarea, proyecto o documento.</p></div>
+      <div class="barra-lista"><span></span><button class="btn-secundario" id="btn-nueva-evidencia">+ Nueva evidencia</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Descripción</th><th>Vinculada a</th><th>Subido por</th><th>Fecha</th><th>Archivo</th></tr></thead>
+        <tbody id="tabla-evidencias"></tbody>
+      </table>
+    </section>
   </main>
 </div>
 
@@ -410,6 +423,9 @@ const NOMBRES_CATEGORIA = {
 let sesionActual = null;
 let cacheProcesos = [];
 let cacheTareas = [];
+let cacheProyectos = [];
+let cacheDocumentos = [];
+let cacheEvidencias = [];
 
 /* ---------------- LOGIN ---------------- */
 const pantallaLogin = document.getElementById('pantalla-login');
@@ -477,6 +493,7 @@ async function cargarTodo() {
     cargarTareas(),
     cargarIndicadores(),
     cargarDocumentos(),
+    cargarEvidencias(),
     cargarResumenErp()
   ]);
 }
@@ -703,7 +720,8 @@ function pintarTablaIndicadores(data) {
 async function cargarProyectos() {
   const { data, error } = await supabase.from('proyectos').select('*, procesos(codigo,nombre)').order('creado_en', { ascending: false });
   if (error) { console.error(error); return; }
-  document.getElementById('tabla-proyectos').innerHTML = (data || []).map(p => `
+  cacheProyectos = data || [];
+  document.getElementById('tabla-proyectos').innerHTML = cacheProyectos.map(p => `
     <tr>
       <td class="mono">${p.codigo}</td>
       <td>${p.nombre}</td>
@@ -806,7 +824,8 @@ function abrirFormEditarTarea(id) {
 async function cargarDocumentos() {
   const { data, error } = await supabase.from('documentos').select('*').order('creado_en', { ascending: false });
   if (error) { console.error(error); return; }
-  document.getElementById('tabla-documentos').innerHTML = (data || []).map(d => `
+  cacheDocumentos = data || [];
+  document.getElementById('tabla-documentos').innerHTML = cacheDocumentos.map(d => `
     <tr>
       <td class="mono">${d.codigo}</td>
       <td>${d.nombre}</td>
@@ -814,6 +833,30 @@ async function cargarDocumentos() {
       <td><span class="pill ${d.estado === 'vigente' ? 'cumplida' : 'pendiente'}">${d.estado}</span></td>
       <td>${d.fecha_vencimiento || '—'}</td>
     </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin documentos todavía.</td></tr>';
+}
+
+/* ---------------- EVIDENCIAS ---------------- */
+async function cargarEvidencias() {
+  const { data, error } = await supabase.from('evidencias')
+    .select('*, tareas(codigo,titulo), proyectos(codigo,nombre), documentos(codigo,nombre)')
+    .order('creado_en', { ascending: false });
+  if (error) { console.error(error); return; }
+  cacheEvidencias = data || [];
+  document.getElementById('tabla-evidencias').innerHTML = cacheEvidencias.map(ev => {
+    const vinculo = ev.tareas ? `Tarea · ${ev.tareas.codigo}`
+      : ev.proyectos ? `Proyecto · ${ev.proyectos.codigo}`
+      : ev.documentos ? `Documento · ${ev.documentos.codigo}`
+      : '—';
+    const fecha = new Date(ev.creado_en).toLocaleDateString('es-CO');
+    return `
+    <tr>
+      <td>${ev.descripcion || '—'}</td>
+      <td>${vinculo}</td>
+      <td>${ev.subido_por || '—'}</td>
+      <td>${fecha}</td>
+      <td><a href="${ev.url_archivo}" target="_blank" rel="noopener" class="enlace-evidencia">Abrir ↗</a></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin evidencias todavía.</td></tr>';
 }
 
 /* ---------------- FORMULARIOS GENÉRICOS (crear) ---------------- */
@@ -947,11 +990,41 @@ function abrirForm(tipo) {
       cerrarForm(); cargarDocumentos();
     };
   }
+  if (tipo === 'evidencia') {
+    tituloForm.textContent = 'Nueva evidencia';
+    formGenerico.innerHTML = `
+      <div class="campo"><label>Descripción</label><input type="text" id="f-descripcion" placeholder="Ej: Foto del taller organizado, captura de la reunión..." /></div>
+      <div class="campo"><label>Enlace del archivo</label><input type="url" id="f-url" required placeholder="https://drive.google.com/..." /></div>
+      <div class="campo"><label>Subido por</label><input type="text" id="f-subido-por" /></div>
+      <div class="campo"><label>Vincular a</label>
+        <select id="f-vinculo">
+          <option value="">— Ninguno —</option>
+          <optgroup label="Tareas">${cacheTareas.map(t => `<option value="tarea:${t.id}">${t.codigo} · ${t.titulo}</option>`).join('')}</optgroup>
+          <optgroup label="Proyectos">${cacheProyectos.map(p => `<option value="proyecto:${p.id}">${p.codigo} · ${p.nombre}</option>`).join('')}</optgroup>
+          <optgroup label="Documentos">${cacheDocumentos.map(d => `<option value="documento:${d.id}">${d.codigo} · ${d.nombre}</option>`).join('')}</optgroup>
+        </select>
+      </div>
+      <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+    formGenerico.onsubmit = async (e) => {
+      e.preventDefault();
+      const [tipoVinculo, idVinculo] = (document.getElementById('f-vinculo').value || '').split(':');
+      await supabase.from('evidencias').insert({
+        descripcion: document.getElementById('f-descripcion').value,
+        url_archivo: document.getElementById('f-url').value,
+        subido_por: document.getElementById('f-subido-por').value,
+        tarea_id: tipoVinculo === 'tarea' ? idVinculo : null,
+        proyecto_id: tipoVinculo === 'proyecto' ? idVinculo : null,
+        documento_id: tipoVinculo === 'documento' ? idVinculo : null
+      });
+      cerrarForm(); cargarEvidencias();
+    };
+  }
   document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
 function cerrarForm() { capaForm.classList.remove('visible'); }
 
 document.getElementById('btn-nuevo-proyecto').addEventListener('click', () => abrirForm('proyecto'));
+document.getElementById('btn-nueva-evidencia').addEventListener('click', () => abrirForm('evidencia'));
 document.getElementById('btn-actualizar-resumen').addEventListener('click', async (e) => {
   e.target.disabled = true;
   e.target.textContent = 'Actualizando…';
