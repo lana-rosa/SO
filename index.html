@@ -194,9 +194,13 @@
   .pill{display:inline-block;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;}
   .pill.pendiente{background:#eef2f6;color:var(--tinta-suave);}
   .pill.en_curso, .pill.en_tratamiento{background:#fff3e0;color:var(--ambar);}
-  .pill.cumplida, .pill.mitigado, .pill.cerrado{background:#e6f4ef;color:var(--verde);}
+  .pill.cumplida, .pill.mitigado, .pill.cerrado, .pill.vigente{background:#e6f4ef;color:var(--verde);}
   .pill.vencida{background:#fbe9e9;color:var(--rojo);}
-  .pill.cancelada{background:var(--blanco-hueso);color:var(--tinta-suave);text-decoration:line-through;}
+  .pill.cancelada, .pill.cancelado, .pill.obsoleto{background:var(--blanco-hueso);color:var(--tinta-suave);text-decoration:line-through;}
+  .pill.planeacion, .pill.identificado, .pill.borrador{background:#eef2f6;color:var(--tinta-suave);}
+  .pill.pausado, .pill.en_revision, .pill.amarillo{background:#fff3e0;color:var(--ambar);}
+  .pill.verde{background:#e6f4ef;color:var(--verde);}
+  .pill.rojo{background:#fbe9e9;color:var(--rojo);}
   select.select-estado{border:1px solid var(--borde);border-radius:20px;font-size:11px;font-weight:600;padding:3px 8px;background:#fff;color:var(--tinta);cursor:pointer;}
   .btn-editar-fila{border:none;background:transparent;cursor:pointer;font-size:14px;color:var(--tinta-suave);padding:4px 8px;border-radius:6px;}
   .btn-editar-fila:hover{background:var(--rosa-suave);color:var(--rosa-fuerte);}
@@ -324,7 +328,7 @@
       <div class="encabezado-vista"><h2>Proyectos</h2><p>Iniciativas activas: Fondo Emprender, apertura de Villamaría, y lo que sigue.</p></div>
       <div class="barra-lista"><span></span><button class="btn-secundario" id="btn-nuevo-proyecto">+ Nuevo proyecto</button></div>
       <table class="tabla-simple">
-        <thead><tr><th>Código</th><th>Nombre</th><th>Proceso</th><th>Estado</th><th>Avance</th></tr></thead>
+        <thead><tr><th>Código</th><th>Nombre</th><th>Proceso</th><th>Estado</th><th>Avance</th><th></th></tr></thead>
         <tbody id="tabla-proyectos"></tbody>
       </table>
     </section>
@@ -334,7 +338,7 @@
       <div class="encabezado-vista"><h2>Riesgos</h2><p>Riesgos identificados sobre procesos y proyectos.</p></div>
       <div class="barra-lista"><span></span><button class="btn-secundario" id="btn-nuevo-riesgo">+ Nuevo riesgo</button></div>
       <table class="tabla-simple">
-        <thead><tr><th>Código</th><th>Descripción</th><th>Probabilidad</th><th>Impacto</th><th>Estado</th></tr></thead>
+        <thead><tr><th>Código</th><th>Descripción</th><th>Probabilidad</th><th>Impacto</th><th>Estado</th><th></th></tr></thead>
         <tbody id="tabla-riesgos"></tbody>
       </table>
     </section>
@@ -354,7 +358,7 @@
       <div class="encabezado-vista"><h2>Indicadores</h2><p>KPI por proceso, con meta, resultado y semáforo.</p></div>
       <div class="barra-lista"><span></span><button class="btn-secundario" id="btn-nuevo-indicador">+ Nuevo indicador</button></div>
       <table class="tabla-simple">
-        <thead><tr><th>Código</th><th>Nombre</th><th>Meta</th><th>Resultado</th><th>Semáforo</th></tr></thead>
+        <thead><tr><th>Código</th><th>Nombre</th><th>Meta</th><th>Resultado</th><th>Semáforo</th><th></th></tr></thead>
         <tbody id="tabla-indicadores"></tbody>
       </table>
     </section>
@@ -364,7 +368,7 @@
       <div class="encabezado-vista"><h2>Documentos</h2><p>Documentos controlados de gestión, con versión y vigencia.</p></div>
       <div class="barra-lista"><span></span><button class="btn-secundario" id="btn-nuevo-documento">+ Nuevo documento</button></div>
       <table class="tabla-simple">
-        <thead><tr><th>Código</th><th>Nombre</th><th>Versión</th><th>Estado</th><th>Vence</th></tr></thead>
+        <thead><tr><th>Código</th><th>Nombre</th><th>Versión</th><th>Estado</th><th>Vence</th><th></th></tr></thead>
         <tbody id="tabla-documentos"></tbody>
       </table>
     </section>
@@ -426,6 +430,8 @@ let cacheTareas = [];
 let cacheProyectos = [];
 let cacheDocumentos = [];
 let cacheEvidencias = [];
+let cacheRiesgos = [];
+let cacheIndicadores = [];
 
 /* ---------------- LOGIN ---------------- */
 const pantallaLogin = document.getElementById('pantalla-login');
@@ -688,8 +694,9 @@ document.getElementById('btn-cerrar-modal').addEventListener('click', () => {
 async function cargarIndicadores() {
   const { data, error } = await supabase.from('indicadores').select('*').order('codigo');
   if (error) { console.error(error); return; }
-  pintarKpis(data || []);
-  pintarTablaIndicadores(data || []);
+  cacheIndicadores = data || [];
+  pintarKpis(cacheIndicadores);
+  pintarTablaIndicadores(cacheIndicadores);
 }
 
 function pintarKpis(indicadores) {
@@ -706,14 +713,60 @@ function pintarKpis(indicadores) {
 }
 
 function pintarTablaIndicadores(data) {
-  document.getElementById('tabla-indicadores').innerHTML = data.map(k => `
+  const cont = document.getElementById('tabla-indicadores');
+  cont.innerHTML = data.map(k => `
     <tr>
       <td class="mono">${k.codigo}</td>
       <td>${k.nombre}</td>
       <td>${k.meta ?? '—'}</td>
       <td>${k.resultado_actual ?? '—'}</td>
-      <td><span class="pill ${k.semaforo === 'verde' ? 'cumplida' : k.semaforo === 'rojo' ? 'vencida' : 'en_curso'}">${k.semaforo || 'sin definir'}</span></td>
-    </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin indicadores todavía.</td></tr>';
+      <td>
+        <select class="select-estado pill ${k.semaforo}" data-id="${k.id}">
+          ${['verde','amarillo','rojo'].map(s => `<option value="${s}" ${k.semaforo === s ? 'selected' : ''}>${s}</option>`).join('')}
+        </select>
+      </td>
+      <td><button type="button" class="btn-editar-fila" data-id="${k.id}" title="Editar">✎</button></td>
+    </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin indicadores todavía.</td></tr>';
+
+  cont.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', () => cambiarEstadoSimple('indicadores', sel.dataset.id, sel.value, cargarIndicadores));
+  });
+  cont.querySelectorAll('.btn-editar-fila').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormEditarIndicador(btn.dataset.id));
+  });
+}
+
+function abrirFormEditarIndicador(id) {
+  const k = cacheIndicadores.find(x => x.id === id);
+  if (!k) return;
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Editar indicador';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Nombre</label><input type="text" id="f-nombre" required value="${(k.nombre||'').replace(/"/g,'&quot;')}" /></div>
+    <div class="campo"><label>Meta</label><input type="number" step="any" id="f-meta" value="${k.meta ?? ''}" /></div>
+    <div class="campo"><label>Resultado actual</label><input type="number" step="any" id="f-resultado" value="${k.resultado_actual ?? ''}" /></div>
+    <div class="campo"><label>Unidad</label><input type="text" id="f-unidad" value="${(k.unidad||'').replace(/"/g,'&quot;')}" placeholder="%, COP, unidades..." /></div>
+    <div class="campo"><label>Semáforo</label><select id="f-semaforo">
+      <option value="verde" ${k.semaforo==='verde'?'selected':''}>Verde</option>
+      <option value="amarillo" ${k.semaforo==='amarillo'?'selected':''}>Amarillo</option>
+      <option value="rojo" ${k.semaforo==='rojo'?'selected':''}>Rojo</option>
+    </select></div>
+    ${selectorProcesoHTML('f-proceso')}
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar cambios</button></div>`;
+  document.getElementById('f-proceso').value = k.proceso_id || '';
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('indicadores').update({
+      nombre: document.getElementById('f-nombre').value,
+      meta: document.getElementById('f-meta').value || null,
+      resultado_actual: document.getElementById('f-resultado').value || null,
+      unidad: document.getElementById('f-unidad').value,
+      semaforo: document.getElementById('f-semaforo').value,
+      proceso_id: document.getElementById('f-proceso').value || null
+    }).eq('id', id);
+    cerrarForm(); cargarIndicadores();
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
 
 /* ---------------- PROYECTOS ---------------- */
@@ -721,28 +774,123 @@ async function cargarProyectos() {
   const { data, error } = await supabase.from('proyectos').select('*, procesos(codigo,nombre)').order('creado_en', { ascending: false });
   if (error) { console.error(error); return; }
   cacheProyectos = data || [];
-  document.getElementById('tabla-proyectos').innerHTML = cacheProyectos.map(p => `
+  const cont = document.getElementById('tabla-proyectos');
+  cont.innerHTML = cacheProyectos.map(p => `
     <tr>
       <td class="mono">${p.codigo}</td>
       <td>${p.nombre}</td>
       <td>${p.procesos ? p.procesos.codigo : '—'}</td>
-      <td><span class="pill ${p.estado}">${p.estado}</span></td>
+      <td>
+        <select class="select-estado pill ${p.estado}" data-id="${p.id}" data-tabla="proyectos">
+          ${['planeacion','en_curso','pausado','cerrado','cancelado'].map(e => `<option value="${e}" ${p.estado === e ? 'selected' : ''}>${e.replace('_',' ')}</option>`).join('')}
+        </select>
+      </td>
       <td>${p.avance_pct || 0}%</td>
-    </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin proyectos todavía.</td></tr>';
+      <td><button type="button" class="btn-editar-fila" data-id="${p.id}" title="Editar">✎</button></td>
+    </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin proyectos todavía.</td></tr>';
+
+  cont.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', () => cambiarEstadoSimple('proyectos', sel.dataset.id, sel.value, cargarProyectos));
+  });
+  cont.querySelectorAll('.btn-editar-fila').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormEditarProyecto(btn.dataset.id));
+  });
+}
+
+async function cambiarEstadoSimple(tabla, id, valor, recargar) {
+  const campo = tabla === 'indicadores' ? 'semaforo' : 'estado';
+  await supabase.from(tabla).update({ [campo]: valor }).eq('id', id);
+  await recargar();
+}
+
+function abrirFormEditarProyecto(id) {
+  const p = cacheProyectos.find(x => x.id === id);
+  if (!p) return;
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Editar proyecto';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Nombre</label><input type="text" id="f-nombre" required value="${(p.nombre||'').replace(/"/g,'&quot;')}" /></div>
+    <div class="campo"><label>Objetivo</label><textarea id="f-objetivo">${p.objetivo || ''}</textarea></div>
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable" value="${(p.responsable||'').replace(/"/g,'&quot;')}" /></div>
+    <div class="campo"><label>Avance (%)</label><input type="number" min="0" max="100" id="f-avance" value="${p.avance_pct || 0}" /></div>
+    ${selectorProcesoHTML('f-proceso')}
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar cambios</button></div>`;
+  document.getElementById('f-proceso').value = p.proceso_id || '';
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('proyectos').update({
+      nombre: document.getElementById('f-nombre').value,
+      objetivo: document.getElementById('f-objetivo').value,
+      responsable: document.getElementById('f-responsable').value,
+      avance_pct: document.getElementById('f-avance').value || 0,
+      proceso_id: document.getElementById('f-proceso').value || null
+    }).eq('id', id);
+    cerrarForm(); cargarProyectos();
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
 
 /* ---------------- RIESGOS ---------------- */
 async function cargarRiesgos() {
   const { data, error } = await supabase.from('riesgos').select('*').order('creado_en', { ascending: false });
   if (error) { console.error(error); return; }
-  document.getElementById('tabla-riesgos').innerHTML = (data || []).map(r => `
+  cacheRiesgos = data || [];
+  const cont = document.getElementById('tabla-riesgos');
+  cont.innerHTML = cacheRiesgos.map(r => `
     <tr>
       <td class="mono">${r.codigo}</td>
       <td>${r.descripcion}</td>
       <td>${r.probabilidad || '—'}</td>
       <td>${r.impacto || '—'}</td>
-      <td><span class="pill ${r.estado}">${r.estado}</span></td>
-    </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin riesgos todavía.</td></tr>';
+      <td>
+        <select class="select-estado pill ${r.estado}" data-id="${r.id}">
+          ${['identificado','en_tratamiento','mitigado','cerrado'].map(e => `<option value="${e}" ${r.estado === e ? 'selected' : ''}>${e.replace('_',' ')}</option>`).join('')}
+        </select>
+      </td>
+      <td><button type="button" class="btn-editar-fila" data-id="${r.id}" title="Editar">✎</button></td>
+    </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin riesgos todavía.</td></tr>';
+
+  cont.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', () => cambiarEstadoSimple('riesgos', sel.dataset.id, sel.value, cargarRiesgos));
+  });
+  cont.querySelectorAll('.btn-editar-fila').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormEditarRiesgo(btn.dataset.id));
+  });
+}
+
+function abrirFormEditarRiesgo(id) {
+  const r = cacheRiesgos.find(x => x.id === id);
+  if (!r) return;
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Editar riesgo';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Descripción</label><textarea id="f-descripcion" required>${r.descripcion || ''}</textarea></div>
+    <div class="campo"><label>Probabilidad</label><select id="f-prob">
+      <option value="baja" ${r.probabilidad==='baja'?'selected':''}>Baja</option>
+      <option value="media" ${r.probabilidad==='media'?'selected':''}>Media</option>
+      <option value="alta" ${r.probabilidad==='alta'?'selected':''}>Alta</option>
+    </select></div>
+    <div class="campo"><label>Impacto</label><select id="f-impacto">
+      <option value="bajo" ${r.impacto==='bajo'?'selected':''}>Bajo</option>
+      <option value="medio" ${r.impacto==='medio'?'selected':''}>Medio</option>
+      <option value="alto" ${r.impacto==='alto'?'selected':''}>Alto</option>
+    </select></div>
+    <div class="campo"><label>Controles</label><textarea id="f-controles">${r.controles || ''}</textarea></div>
+    ${selectorProcesoHTML('f-proceso')}
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar cambios</button></div>`;
+  document.getElementById('f-proceso').value = r.proceso_id || '';
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('riesgos').update({
+      descripcion: document.getElementById('f-descripcion').value,
+      probabilidad: document.getElementById('f-prob').value,
+      impacto: document.getElementById('f-impacto').value,
+      controles: document.getElementById('f-controles').value,
+      proceso_id: document.getElementById('f-proceso').value || null
+    }).eq('id', id);
+    cerrarForm(); cargarRiesgos();
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
 
 /* ---------------- TAREAS ---------------- */
@@ -825,14 +973,54 @@ async function cargarDocumentos() {
   const { data, error } = await supabase.from('documentos').select('*').order('creado_en', { ascending: false });
   if (error) { console.error(error); return; }
   cacheDocumentos = data || [];
-  document.getElementById('tabla-documentos').innerHTML = cacheDocumentos.map(d => `
+  const cont = document.getElementById('tabla-documentos');
+  cont.innerHTML = cacheDocumentos.map(d => `
     <tr>
       <td class="mono">${d.codigo}</td>
       <td>${d.nombre}</td>
       <td>${d.version}</td>
-      <td><span class="pill ${d.estado === 'vigente' ? 'cumplida' : 'pendiente'}">${d.estado}</span></td>
+      <td>
+        <select class="select-estado pill ${d.estado}" data-id="${d.id}">
+          ${['borrador','vigente','en_revision','obsoleto'].map(e => `<option value="${e}" ${d.estado === e ? 'selected' : ''}>${e.replace('_',' ')}</option>`).join('')}
+        </select>
+      </td>
       <td>${d.fecha_vencimiento || '—'}</td>
-    </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin documentos todavía.</td></tr>';
+      <td><button type="button" class="btn-editar-fila" data-id="${d.id}" title="Editar">✎</button></td>
+    </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin documentos todavía.</td></tr>';
+
+  cont.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', () => cambiarEstadoSimple('documentos', sel.dataset.id, sel.value, cargarDocumentos));
+  });
+  cont.querySelectorAll('.btn-editar-fila').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormEditarDocumento(btn.dataset.id));
+  });
+}
+
+function abrirFormEditarDocumento(id) {
+  const d = cacheDocumentos.find(x => x.id === id);
+  if (!d) return;
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Editar documento';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Nombre</label><input type="text" id="f-nombre" required value="${(d.nombre||'').replace(/"/g,'&quot;')}" /></div>
+    <div class="campo"><label>Versión</label><input type="text" id="f-version" value="${(d.version||'1.0').replace(/"/g,'&quot;')}" /></div>
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable" value="${(d.responsable||'').replace(/"/g,'&quot;')}" /></div>
+    <div class="campo"><label>Fecha de vencimiento</label><input type="date" id="f-vencimiento" value="${d.fecha_vencimiento || ''}" /></div>
+    ${selectorProcesoHTML('f-proceso')}
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar cambios</button></div>`;
+  document.getElementById('f-proceso').value = d.proceso_id || '';
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('documentos').update({
+      nombre: document.getElementById('f-nombre').value,
+      version: document.getElementById('f-version').value || '1.0',
+      responsable: document.getElementById('f-responsable').value,
+      fecha_vencimiento: document.getElementById('f-vencimiento').value || null,
+      proceso_id: document.getElementById('f-proceso').value || null
+    }).eq('id', id);
+    cerrarForm(); cargarDocumentos();
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
 
 /* ---------------- EVIDENCIAS ---------------- */
