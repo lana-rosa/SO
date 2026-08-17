@@ -143,6 +143,36 @@
   .lista-alerta li.info{border-color:var(--verde);background:#eaf4ef;}
   .panel-erp .vacio-mini{font-size:12.5px;color:var(--tinta-suave);}
   .panel-erp .error-mini{font-size:12.5px;color:var(--rojo);}
+  .btn-volver{border:none;background:none;color:var(--rosa-fuerte);font-weight:600;font-size:13px;cursor:pointer;padding:0;margin-bottom:14px;display:inline-flex;align-items:center;gap:4px;}
+  .btn-volver:hover{text-decoration:underline;}
+  .cabecera-proceso{background:#fff;border:1px solid var(--borde);border-radius:var(--radio);padding:22px 24px;margin-bottom:26px;}
+  .cabecera-proceso .cod{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--rosa-fuerte);font-weight:700;}
+  .cabecera-proceso h2{margin:4px 0 12px;font-size:22px;}
+  .cabecera-proceso .fila-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;}
+  .cabecera-proceso .fila-meta .etq{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--tinta-suave);font-weight:700;margin-bottom:3px;}
+  .cabecera-proceso .fila-meta .val{font-size:13.5px;}
+  .bloque-titulo{font-size:16px;font-weight:700;margin:30px 0 12px;padding-top:6px;}
+  .bloque-titulo:first-of-type{margin-top:0;}
+  .panel-erp textarea, .panel-erp input[type=text]{width:100%;border:1px solid var(--borde);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;margin-bottom:8px;}
+  .panel-erp textarea{min-height:60px;resize:vertical;}
+  .grid-foda{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media (max-width:640px){.grid-foda{grid-template-columns:1fr;}}
+  .cuadrante-foda h4{margin:0 0 8px;font-size:12.5px;text-transform:uppercase;letter-spacing:.03em;}
+  .cuadrante-foda.fortaleza h4{color:var(--verde);}
+  .cuadrante-foda.debilidad h4{color:var(--rojo);}
+  .cuadrante-foda.oportunidad h4{color:#4c7594;}
+  .cuadrante-foda.amenaza h4{color:var(--ambar);}
+  .item-foda{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;background:var(--blanco-hueso);border-radius:8px;padding:7px 10px;font-size:13px;margin-bottom:6px;}
+  .item-foda .quitar{border:none;background:none;color:var(--tinta-suave);cursor:pointer;font-size:14px;line-height:1;flex-shrink:0;}
+  .item-foda .quitar:hover{color:var(--rojo);}
+  .form-mini-inline{display:flex;gap:6px;margin-top:8px;}
+  .form-mini-inline input{flex:1;border:1px solid var(--borde);border-radius:8px;padding:6px 9px;font-size:12.5px;}
+  .form-mini-inline button{border:none;background:var(--rosa-fuerte);color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;}
+  .fila-revision{border-bottom:1px solid var(--borde);padding:12px 0;}
+  .fila-revision:last-child{border-bottom:none;}
+  .fila-revision .fecha-rev{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--rosa-fuerte);font-weight:700;}
+  .fila-revision .campo-rev{margin-top:4px;font-size:13px;}
+  .fila-revision .campo-rev b{font-weight:600;color:var(--tinta-suave);font-size:11.5px;text-transform:uppercase;margin-right:4px;}
 
   .estado-vacio{
     background:#fff;border:1px dashed var(--borde);border-radius:var(--radio);
@@ -393,21 +423,13 @@
         <tbody id="tabla-evidencias"></tbody>
       </table>
     </section>
-  </main>
-</div>
 
-<!-- ===================== MODAL DETALLE PROCESO ===================== -->
-<div class="capa-modal" id="capa-modal-proceso">
-  <div class="modal">
-    <div class="cod" id="detalle-cod"></div>
-    <h3 id="detalle-nombre"></h3>
-    <div class="campo-detalle"><div class="etq">Objetivo</div><div class="val" id="detalle-objetivo"></div></div>
-    <div class="campo-detalle"><div class="etq">Responsable</div><div class="val" id="detalle-responsable"></div></div>
-    <div class="campo-detalle"><div class="etq">Sistemas relacionados</div><div class="val" id="detalle-sistemas"></div></div>
-    <div class="campo-detalle"><div class="etq">Estado</div><div class="val" id="detalle-estado"></div></div>
-    <div id="detalle-relacionados"></div>
-    <button class="cerrar" id="btn-cerrar-modal">Cerrar</button>
-  </div>
+    <!-- ---- DETALLE DE PROCESO (pantalla completa) ---- -->
+    <section class="vista" data-vista="detalle-proceso">
+      <button type="button" class="btn-volver" id="btn-volver-proceso">← Volver al mapa de procesos</button>
+      <div id="contenido-detalle-proceso"></div>
+    </section>
+  </main>
 </div>
 
 <!-- ===================== FORMULARIOS GENÉRICOS ===================== -->
@@ -492,15 +514,15 @@ function mostrarApp() {
 }
 
 /* ---------------- NAVEGACIÓN ---------------- */
+function mostrarVista(vista) {
+  document.querySelectorAll('nav.menu button').forEach(b => b.classList.toggle('activo', b.dataset.vista === vista));
+  document.querySelectorAll('.vista').forEach(v => v.classList.toggle('activa', v.dataset.vista === vista));
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
 document.querySelectorAll('nav.menu button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('nav.menu button').forEach(b => b.classList.remove('activo'));
-    btn.classList.add('activo');
-    const vista = btn.dataset.vista;
-    document.querySelectorAll('.vista').forEach(v => v.classList.remove('activa'));
-    document.querySelector('.vista[data-vista="' + vista + '"]').classList.add('activa');
-  });
+  btn.addEventListener('click', () => mostrarVista(btn.dataset.vista));
 });
+document.getElementById('btn-volver-proceso').addEventListener('click', () => mostrarVista('dashboard'));
 
 /* ---------------- CARGA DE DATOS ---------------- */
 async function cargarTodo() {
@@ -690,25 +712,41 @@ function pintarTablaProcesos(procesos) {
 function abrirDetalleProceso(id) {
   const p = cacheProcesos.find(x => x.id === id);
   if (!p) return;
-  document.getElementById('detalle-cod').textContent = p.codigo;
-  document.getElementById('detalle-nombre').textContent = p.nombre;
-  document.getElementById('detalle-objetivo').textContent = p.objetivo || '—';
-  document.getElementById('detalle-responsable').textContent = p.responsable || '—';
-  document.getElementById('detalle-sistemas').textContent = (p.sistemas_relacionados || []).join(', ') || '—';
-  document.getElementById('detalle-estado').textContent = p.estado === 'reservado' ? 'Reservado — se activa cuando la empresa crezca' : 'Activo';
+  mostrarVista('detalle-proceso');
 
+  const cont = document.getElementById('contenido-detalle-proceso');
+  cont.innerHTML = `
+    <div class="cabecera-proceso">
+      <div class="cod">${p.codigo}</div>
+      <h2>${p.nombre}</h2>
+      <div class="fila-meta">
+        <div><div class="etq">Objetivo</div><div class="val">${p.objetivo || '—'}</div></div>
+        <div><div class="etq">Responsable</div><div class="val">${p.responsable || '—'}</div></div>
+        <div><div class="etq">Sistemas relacionados</div><div class="val">${(p.sistemas_relacionados || []).join(', ') || '—'}</div></div>
+        <div><div class="etq">Estado</div><div class="val">${p.estado === 'reservado' ? 'Reservado — se activa cuando la empresa crezca' : 'Activo'}</div></div>
+      </div>
+    </div>
+    <div id="bloque-estrategico"></div>
+    <div class="bloque-titulo">Información relacionada</div>
+    <div class="grid-erp" id="grid-relacionados"></div>`;
+
+  renderSeccionesRelacionadas(p);
+  if (p.codigo === 'PE-01') cargarModulosEstrategicos(p.id);
+}
+
+function renderSeccionesRelacionadas(p) {
   const esReservado = p.estado === 'reservado';
   const secciones = [
-    { titulo: 'Proyectos', tipo: 'proyecto', items: cacheProyectos.filter(x => x.proceso_id === id), texto: x => `<span class="mono">${x.codigo}</span>${x.nombre}`, pill: x => x.estado, editar: x => abrirFormEditarProyecto(x.id) },
-    { titulo: 'Riesgos', tipo: 'riesgo', items: cacheRiesgos.filter(x => x.proceso_id === id), texto: x => `<span class="mono">${x.codigo}</span>${x.descripcion}`, pill: x => x.estado, editar: x => abrirFormEditarRiesgo(x.id) },
-    { titulo: 'Tareas', tipo: 'tarea', items: cacheTareas.filter(x => x.proceso_id === id), texto: x => `<span class="mono">${x.codigo}</span>${x.titulo}`, pill: x => x.estado, editar: x => abrirFormEditarTarea(x.id) },
-    { titulo: 'Indicadores', tipo: 'indicador', items: cacheIndicadores.filter(x => x.proceso_id === id), texto: x => `<span class="mono">${x.codigo}</span>${x.nombre}`, pill: x => x.semaforo, editar: x => abrirFormEditarIndicador(x.id) },
-    { titulo: 'Documentos', tipo: 'documento', items: cacheDocumentos.filter(x => x.proceso_id === id), texto: x => `<span class="mono">${x.codigo}</span>${x.nombre}`, pill: x => x.estado, editar: x => abrirFormEditarDocumento(x.id) },
+    { titulo: 'Proyectos', tipo: 'proyecto', items: cacheProyectos.filter(x => x.proceso_id === p.id), texto: x => `<span class="mono">${x.codigo}</span>${x.nombre}`, pill: x => x.estado, editar: x => abrirFormEditarProyecto(x.id) },
+    { titulo: 'Riesgos', tipo: 'riesgo', items: cacheRiesgos.filter(x => x.proceso_id === p.id), texto: x => `<span class="mono">${x.codigo}</span>${x.descripcion}`, pill: x => x.estado, editar: x => abrirFormEditarRiesgo(x.id) },
+    { titulo: 'Tareas', tipo: 'tarea', items: cacheTareas.filter(x => x.proceso_id === p.id), texto: x => `<span class="mono">${x.codigo}</span>${x.titulo}`, pill: x => x.estado, editar: x => abrirFormEditarTarea(x.id) },
+    { titulo: 'Indicadores', tipo: 'indicador', items: cacheIndicadores.filter(x => x.proceso_id === p.id), texto: x => `<span class="mono">${x.codigo}</span>${x.nombre}`, pill: x => x.semaforo, editar: x => abrirFormEditarIndicador(x.id) },
+    { titulo: 'Documentos', tipo: 'documento', items: cacheDocumentos.filter(x => x.proceso_id === p.id), texto: x => `<span class="mono">${x.codigo}</span>${x.nombre}`, pill: x => x.estado, editar: x => abrirFormEditarDocumento(x.id) },
   ];
 
-  const cont = document.getElementById('detalle-relacionados');
-  cont.innerHTML = secciones.map((s, i) => `
-    <div class="seccion-relacionada">
+  const grid = document.getElementById('grid-relacionados');
+  grid.innerHTML = secciones.map((s, i) => `
+    <div class="panel-erp">
       <div class="cab-seccion">
         <h4>${s.titulo} (${s.items.length})</h4>
         ${esReservado ? '' : `<button type="button" class="btn-agregar-rel" data-idx="${i}">+ Agregar</button>`}
@@ -720,27 +758,175 @@ function abrirDetalleProceso(id) {
       </div>
     </div>`).join('');
 
-  cont.querySelectorAll('.item-relacionado').forEach(el => {
+  grid.querySelectorAll('.item-relacionado').forEach(el => {
     el.addEventListener('click', () => {
       const s = secciones[el.dataset.idx];
-      const item = s.items[el.dataset.j];
-      document.getElementById('capa-modal-proceso').classList.remove('visible');
-      s.editar(item);
+      s.editar(s.items[el.dataset.j]);
     });
   });
-  cont.querySelectorAll('.btn-agregar-rel').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const s = secciones[btn.dataset.idx];
-      document.getElementById('capa-modal-proceso').classList.remove('visible');
-      abrirForm(s.tipo, id);
+  grid.querySelectorAll('.btn-agregar-rel').forEach(btn => {
+    btn.addEventListener('click', () => abrirForm(secciones[btn.dataset.idx].tipo, p.id));
+  });
+}
+
+/* ---------------- MÓDULOS ESTRATÉGICOS (PE-01) ---------------- */
+async function cargarModulosEstrategicos(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando módulos estratégicos…</div></div>';
+
+  const [{ data: identidad }, { data: foda }, { data: partes }, { data: revisiones }] = await Promise.all([
+    supabase.from('identidad_estrategica').select('*').eq('proceso_id', procesoId).maybeSingle(),
+    supabase.from('analisis_foda').select('*').eq('proceso_id', procesoId).order('creado_en'),
+    supabase.from('partes_interesadas').select('*').eq('proceso_id', procesoId).order('creado_en'),
+    supabase.from('revisiones_estrategicas').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+  ]);
+
+  const ie = identidad || {};
+  const tiposFoda = [
+    { clave: 'fortaleza', etiqueta: 'Fortalezas' },
+    { clave: 'debilidad', etiqueta: 'Debilidades' },
+    { clave: 'oportunidad', etiqueta: 'Oportunidades' },
+    { clave: 'amenaza', etiqueta: 'Amenazas' },
+  ];
+  const catsParte = { cliente: 'Cliente', proveedor: 'Proveedor', aliado: 'Aliado', regulador: 'Regulador', interno: 'Interno', otro: 'Otro' };
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Identidad estratégica</div>
+    <div class="panel-erp">
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Misión</label>
+      <textarea id="ie-mision" placeholder="¿Por qué existe Lana Rosa hoy?">${ie.mision || ''}</textarea>
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Visión</label>
+      <textarea id="ie-vision" placeholder="¿Hacia dónde va la empresa?">${ie.vision || ''}</textarea>
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Valores (uno por línea)</label>
+      <textarea id="ie-valores" placeholder="Cercanía&#10;Calidad artesanal&#10;Autenticidad">${ie.valores || ''}</textarea>
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Propósito</label>
+      <textarea id="ie-proposito" placeholder="El impacto que quieres dejar más allá de vender">${ie.proposito || ''}</textarea>
+      <button type="button" class="btn-secundario" id="btn-guardar-identidad">Guardar identidad estratégica</button>
+    </div>
+
+    <div class="bloque-titulo">Análisis FODA</div>
+    <div class="panel-erp">
+      <div class="grid-foda">
+        ${tiposFoda.map(t => `
+          <div class="cuadrante-foda ${t.clave}">
+            <h4>${t.etiqueta}</h4>
+            <div class="lista-foda" data-tipo="${t.clave}">
+              ${(foda || []).filter(f => f.tipo === t.clave).map(f => `<div class="item-foda" data-id="${f.id}"><span>${f.descripcion}</span><button type="button" class="quitar" data-id="${f.id}">×</button></div>`).join('') || `<div class="sin-relacionados">Sin ${t.etiqueta.toLowerCase()} todavía.</div>`}
+            </div>
+            <div class="form-mini-inline">
+              <input type="text" placeholder="Agregar..." data-tipo-input="${t.clave}" />
+              <button type="button" class="btn-agregar-foda" data-tipo="${t.clave}">+</button>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="bloque-titulo">Partes interesadas</div>
+    <div class="panel-erp">
+      <div class="lista-relacionada" id="lista-partes">
+        ${(partes || []).map(pi => `
+          <div class="item-relacionado" style="cursor:default;">
+            <span class="txt"><b>${pi.nombre}</b> — ${pi.expectativa || 'sin expectativa registrada'}</span>
+            <span class="pill pendiente">${catsParte[pi.categoria] || pi.categoria}</span>
+            <button type="button" class="quitar" data-id="${pi.id}" style="border:none;background:none;color:var(--tinta-suave);cursor:pointer;font-size:14px;margin-left:6px;">×</button>
+          </div>`).join('') || '<div class="sin-relacionados">Sin partes interesadas todavía.</div>'}
+      </div>
+      <div class="campo" style="margin-top:10px;"><label>Nombre</label><input type="text" id="pi-nombre" placeholder="Ej: Universidad de Caldas" /></div>
+      <div class="campo"><label>Categoría</label><select id="pi-categoria">
+        ${Object.entries(catsParte).map(([v,l]) => `<option value="${v}">${l}</option>`).join('')}
+      </select></div>
+      <div class="campo"><label>¿Qué espera de nosotros?</label><input type="text" id="pi-expectativa" placeholder="Ej: Piezas entregadas a tiempo" /></div>
+      <button type="button" class="btn-secundario" id="btn-agregar-parte">+ Agregar parte interesada</button>
+    </div>
+
+    <div class="bloque-titulo">Revisiones estratégicas</div>
+    <div class="panel-erp">
+      <div id="lista-revisiones">
+        ${(revisiones || []).map(r => `
+          <div class="fila-revision">
+            <div class="fecha-rev">${r.fecha}${r.proxima_revision ? ' · próxima: ' + r.proxima_revision : ''}</div>
+            ${r.participantes ? `<div class="campo-rev"><b>Participantes</b>${r.participantes}</div>` : ''}
+            ${r.temas ? `<div class="campo-rev"><b>Temas</b>${r.temas}</div>` : ''}
+            ${r.decisiones ? `<div class="campo-rev"><b>Decisiones</b>${r.decisiones}</div>` : ''}
+          </div>`).join('') || '<div class="sin-relacionados">Sin revisiones registradas todavía.</div>'}
+      </div>
+      <button type="button" class="btn-secundario" id="btn-nueva-revision" style="margin-top:10px;">+ Registrar revisión</button>
+    </div>`;
+
+  document.getElementById('btn-guardar-identidad').addEventListener('click', async () => {
+    await supabase.from('identidad_estrategica').upsert({
+      proceso_id: procesoId,
+      mision: document.getElementById('ie-mision').value,
+      vision: document.getElementById('ie-vision').value,
+      valores: document.getElementById('ie-valores').value,
+      proposito: document.getElementById('ie-proposito').value,
+      actualizado_en: new Date().toISOString()
+    }, { onConflict: 'proceso_id' });
+    cargarModulosEstrategicos(procesoId);
+  });
+
+  bloque.querySelectorAll('.btn-agregar-foda').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const tipo = btn.dataset.tipo;
+      const input = bloque.querySelector(`input[data-tipo-input="${tipo}"]`);
+      if (!input.value.trim()) return;
+      await supabase.from('analisis_foda').insert({ proceso_id: procesoId, tipo, descripcion: input.value.trim() });
+      cargarModulosEstrategicos(procesoId);
+    });
+  });
+  bloque.querySelectorAll('.item-foda .quitar').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await supabase.from('analisis_foda').delete().eq('id', btn.dataset.id);
+      cargarModulosEstrategicos(procesoId);
     });
   });
 
-  document.getElementById('capa-modal-proceso').classList.add('visible');
+  document.getElementById('btn-agregar-parte').addEventListener('click', async () => {
+    const nombre = document.getElementById('pi-nombre').value.trim();
+    if (!nombre) return;
+    await supabase.from('partes_interesadas').insert({
+      proceso_id: procesoId,
+      nombre,
+      categoria: document.getElementById('pi-categoria').value,
+      expectativa: document.getElementById('pi-expectativa').value
+    });
+    cargarModulosEstrategicos(procesoId);
+  });
+  document.getElementById('lista-partes').querySelectorAll('.quitar').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await supabase.from('partes_interesadas').delete().eq('id', btn.dataset.id);
+      cargarModulosEstrategicos(procesoId);
+    });
+  });
+
+  document.getElementById('btn-nueva-revision').addEventListener('click', () => abrirFormNuevaRevision(procesoId));
 }
-document.getElementById('btn-cerrar-modal').addEventListener('click', () => {
-  document.getElementById('capa-modal-proceso').classList.remove('visible');
-});
+
+function abrirFormNuevaRevision(procesoId) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Nueva revisión estratégica';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-rev" required value="${new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label>Participantes</label><input type="text" id="f-participantes" placeholder="Sara, Jennifer..." /></div>
+    <div class="campo"><label>Temas tratados</label><textarea id="f-temas" placeholder="Avance de objetivos, resultados del trimestre..."></textarea></div>
+    <div class="campo"><label>Decisiones y acciones</label><textarea id="f-decisiones" placeholder="Qué se decidió cambiar o mantener"></textarea></div>
+    <div class="campo"><label>Próxima revisión</label><input type="date" id="f-proxima-rev" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('revisiones_estrategicas').insert({
+      proceso_id: procesoId,
+      fecha: document.getElementById('f-fecha-rev').value,
+      participantes: document.getElementById('f-participantes').value,
+      temas: document.getElementById('f-temas').value,
+      decisiones: document.getElementById('f-decisiones').value,
+      proxima_revision: document.getElementById('f-proxima-rev').value || null
+    });
+    cerrarForm();
+    cargarModulosEstrategicos(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
 
 /* ---------------- KPI / DASHBOARD ---------------- */
 async function cargarIndicadores() {
