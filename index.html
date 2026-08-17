@@ -174,13 +174,24 @@
   /* ---------- MODAL DETALLE ---------- */
   .capa-modal{display:none;position:fixed;inset:0;background:rgba(43,36,48,0.4);align-items:center;justify-content:center;padding:20px;z-index:50;}
   .capa-modal.visible{display:flex;}
-  .modal{background:#fff;border-radius:var(--radio);padding:28px;max-width:460px;width:100%;max-height:85vh;overflow:auto;}
+  .modal{background:#fff;border-radius:var(--radio);padding:28px;max-width:640px;width:100%;max-height:88vh;overflow:auto;}
   .modal .cod{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--rosa-fuerte);font-weight:600;}
   .modal h3{margin:6px 0 14px;font-size:19px;}
   .modal .campo-detalle{margin-bottom:12px;}
   .modal .campo-detalle .etq{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--tinta-suave);font-weight:700;margin-bottom:3px;}
   .modal .campo-detalle .val{font-size:14px;}
   .modal .cerrar{margin-top:10px;width:100%;padding:10px;border:1px solid var(--borde);background:none;border-radius:8px;font-size:13px;}
+  .seccion-relacionada{border-top:1px solid var(--borde);padding-top:14px;margin-top:14px;}
+  .seccion-relacionada .cab-seccion{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .seccion-relacionada .cab-seccion h4{margin:0;font-size:13px;color:var(--tinta);}
+  .seccion-relacionada .cab-seccion .btn-agregar-rel{border:none;background:var(--rosa-suave);color:var(--rosa-fuerte);font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;cursor:pointer;}
+  .seccion-relacionada .cab-seccion .btn-agregar-rel:hover{background:var(--rosa-medio);color:#fff;}
+  .lista-relacionada{display:flex;flex-direction:column;gap:6px;}
+  .item-relacionado{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:8px;background:var(--blanco-hueso);cursor:pointer;font-size:13px;}
+  .item-relacionado:hover{background:var(--rosa-suave);}
+  .item-relacionado .txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .item-relacionado .txt .mono{color:var(--tinta-suave);margin-right:6px;}
+  .sin-relacionados{font-size:12.5px;color:var(--tinta-suave);padding:4px 2px;}
 
   /* ---------- LISTAS / TABLAS ---------- */
   .barra-lista{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px;flex-wrap:wrap;}
@@ -394,6 +405,7 @@
     <div class="campo-detalle"><div class="etq">Responsable</div><div class="val" id="detalle-responsable"></div></div>
     <div class="campo-detalle"><div class="etq">Sistemas relacionados</div><div class="val" id="detalle-sistemas"></div></div>
     <div class="campo-detalle"><div class="etq">Estado</div><div class="val" id="detalle-estado"></div></div>
+    <div id="detalle-relacionados"></div>
     <button class="cerrar" id="btn-cerrar-modal">Cerrar</button>
   </div>
 </div>
@@ -684,6 +696,46 @@ function abrirDetalleProceso(id) {
   document.getElementById('detalle-responsable').textContent = p.responsable || '—';
   document.getElementById('detalle-sistemas').textContent = (p.sistemas_relacionados || []).join(', ') || '—';
   document.getElementById('detalle-estado').textContent = p.estado === 'reservado' ? 'Reservado — se activa cuando la empresa crezca' : 'Activo';
+
+  const esReservado = p.estado === 'reservado';
+  const secciones = [
+    { titulo: 'Proyectos', tipo: 'proyecto', items: cacheProyectos.filter(x => x.proceso_id === id), texto: x => `<span class="mono">${x.codigo}</span>${x.nombre}`, pill: x => x.estado, editar: x => abrirFormEditarProyecto(x.id) },
+    { titulo: 'Riesgos', tipo: 'riesgo', items: cacheRiesgos.filter(x => x.proceso_id === id), texto: x => `<span class="mono">${x.codigo}</span>${x.descripcion}`, pill: x => x.estado, editar: x => abrirFormEditarRiesgo(x.id) },
+    { titulo: 'Tareas', tipo: 'tarea', items: cacheTareas.filter(x => x.proceso_id === id), texto: x => `<span class="mono">${x.codigo}</span>${x.titulo}`, pill: x => x.estado, editar: x => abrirFormEditarTarea(x.id) },
+    { titulo: 'Indicadores', tipo: 'indicador', items: cacheIndicadores.filter(x => x.proceso_id === id), texto: x => `<span class="mono">${x.codigo}</span>${x.nombre}`, pill: x => x.semaforo, editar: x => abrirFormEditarIndicador(x.id) },
+    { titulo: 'Documentos', tipo: 'documento', items: cacheDocumentos.filter(x => x.proceso_id === id), texto: x => `<span class="mono">${x.codigo}</span>${x.nombre}`, pill: x => x.estado, editar: x => abrirFormEditarDocumento(x.id) },
+  ];
+
+  const cont = document.getElementById('detalle-relacionados');
+  cont.innerHTML = secciones.map((s, i) => `
+    <div class="seccion-relacionada">
+      <div class="cab-seccion">
+        <h4>${s.titulo} (${s.items.length})</h4>
+        ${esReservado ? '' : `<button type="button" class="btn-agregar-rel" data-idx="${i}">+ Agregar</button>`}
+      </div>
+      <div class="lista-relacionada">
+        ${s.items.length
+          ? s.items.map((x, j) => `<div class="item-relacionado" data-idx="${i}" data-j="${j}"><span class="txt">${s.texto(x)}</span><span class="pill ${s.pill(x)}">${(s.pill(x) || '').replace('_',' ')}</span></div>`).join('')
+          : `<div class="sin-relacionados">Sin ${s.titulo.toLowerCase()} vinculados todavía.</div>`}
+      </div>
+    </div>`).join('');
+
+  cont.querySelectorAll('.item-relacionado').forEach(el => {
+    el.addEventListener('click', () => {
+      const s = secciones[el.dataset.idx];
+      const item = s.items[el.dataset.j];
+      document.getElementById('capa-modal-proceso').classList.remove('visible');
+      s.editar(item);
+    });
+  });
+  cont.querySelectorAll('.btn-agregar-rel').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const s = secciones[btn.dataset.idx];
+      document.getElementById('capa-modal-proceso').classList.remove('visible');
+      abrirForm(s.tipo, id);
+    });
+  });
+
   document.getElementById('capa-modal-proceso').classList.add('visible');
 }
 document.getElementById('btn-cerrar-modal').addEventListener('click', () => {
@@ -1066,7 +1118,7 @@ function generarCodigo(prefijo) {
   return `${prefijo}-${año}-${n}`;
 }
 
-function abrirForm(tipo) {
+function abrirForm(tipo, procesoPreseleccionado) {
   capaForm.classList.add('visible');
   if (tipo === 'proyecto') {
     tituloForm.textContent = 'Nuevo proyecto';
@@ -1208,6 +1260,10 @@ function abrirForm(tipo) {
     };
   }
   document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+  if (procesoPreseleccionado) {
+    const selProceso = document.getElementById('f-proceso');
+    if (selProceso) selProceso.value = procesoPreseleccionado;
+  }
 }
 function cerrarForm() { capaForm.classList.remove('visible'); }
 
