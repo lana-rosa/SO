@@ -745,6 +745,7 @@ function abrirDetalleProceso(id) {
   if (p.codigo === 'PA-05') cargarModulosTecnologia(p.id);
   if (p.codigo === 'PA-06') cargarModulosDocumental(p.id);
   if (p.codigo === 'PA-07') cargarModulosSst(p.id);
+  if (p.codigo === 'PA-08') cargarModulosAmbiental(p.id);
 }
 
 function renderSeccionesRelacionadas(p) {
@@ -2446,6 +2447,81 @@ function abrirFormPeligro(procesoId, peligroExistente) {
     }
     cerrarForm();
     cargarModulosSst(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULO AMBIENTAL — ASPECTOS E IMPACTOS (PA-08) ---------------- */
+const ETIQUETAS_SIGNIFICANCIA = { baja: 'Baja', media: 'Media', alta: 'Alta' };
+
+async function cargarModulosAmbiental(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const { data: aspectos } = await supabase.from('aspectos_ambientales').select('*').eq('proceso_id', procesoId).order('significancia', { ascending: false });
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Aspectos e impactos ambientales</div>
+    <div class="panel-erp">
+      <p style="font-size:12.5px;color:var(--tinta-suave);margin-top:0;">Qué actividades del negocio interactúan con el ambiente (residuos de lana, empaques, energía) y qué se hace al respecto. Los objetivos ambientales medibles se manejan desde el módulo de Indicadores, vinculándolos a este proceso.</p>
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nuevo-aspecto">+ Registrar aspecto</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Aspecto</th><th>Actividad</th><th>Impacto</th><th>Significancia</th><th>Medida de control</th><th></th></tr></thead>
+        <tbody>
+          ${(aspectos || []).map(a => `
+            <tr>
+              <td>${a.aspecto}</td>
+              <td>${a.actividad_relacionada || '—'}</td>
+              <td><span class="pill ${a.impacto === 'positivo' ? 'cumplida' : 'pendiente'}">${a.impacto}</span></td>
+              <td><span class="pill ${a.significancia === 'alta' ? 'vencida' : a.significancia === 'media' ? 'en_curso' : 'cumplida'}">${ETIQUETAS_SIGNIFICANCIA[a.significancia]}</span></td>
+              <td>${a.medida_control || '—'}</td>
+              <td><button type="button" class="btn-editar-fila btn-editar-aspecto" data-id="${a.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin aspectos registrados todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById('btn-nuevo-aspecto').addEventListener('click', () => abrirFormAspectoAmbiental(procesoId));
+  bloque.querySelectorAll('.btn-editar-aspecto').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormAspectoAmbiental(procesoId, (aspectos || []).find(a => a.id === btn.dataset.id)));
+  });
+}
+
+function abrirFormAspectoAmbiental(procesoId, aspectoExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = aspectoExistente ? 'Editar aspecto ambiental' : 'Registrar aspecto ambiental';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Aspecto ambiental</label><input type="text" id="f-aspecto" required value="${aspectoExistente ? (aspectoExistente.aspecto||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: Residuos de lana, empaques, consumo eléctrico..." /></div>
+    <div class="campo"><label>Actividad relacionada</label><input type="text" id="f-actividad-amb" value="${aspectoExistente ? (aspectoExistente.actividad_relacionada||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: Producción en el taller" /></div>
+    <div class="campo"><label>Impacto</label><select id="f-impacto-amb">
+      <option value="negativo" ${aspectoExistente && aspectoExistente.impacto==='negativo' ? 'selected':''}>Negativo</option>
+      <option value="positivo" ${aspectoExistente && aspectoExistente.impacto==='positivo' ? 'selected':''}>Positivo</option>
+    </select></div>
+    <div class="campo"><label>Significancia</label><select id="f-significancia-amb">
+      ${Object.entries(ETIQUETAS_SIGNIFICANCIA).map(([v,l]) => `<option value="${v}" ${aspectoExistente && aspectoExistente.significancia===v ? 'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Medida de control</label><textarea id="f-medida-amb" placeholder="Qué se hace para reducir el impacto — ej. reutilizar retazos de lana">${aspectoExistente ? (aspectoExistente.medida_control || '') : ''}</textarea></div>
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable-amb" value="${aspectoExistente ? (aspectoExistente.responsable||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      aspecto: document.getElementById('f-aspecto').value,
+      actividad_relacionada: document.getElementById('f-actividad-amb').value,
+      impacto: document.getElementById('f-impacto-amb').value,
+      significancia: document.getElementById('f-significancia-amb').value,
+      medida_control: document.getElementById('f-medida-amb').value,
+      responsable: document.getElementById('f-responsable-amb').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (aspectoExistente) {
+      await supabase.from('aspectos_ambientales').update(datos).eq('id', aspectoExistente.id);
+    } else {
+      await supabase.from('aspectos_ambientales').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosAmbiental(procesoId);
   };
   document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
