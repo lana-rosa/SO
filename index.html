@@ -741,6 +741,10 @@ function abrirDetalleProceso(id) {
   if (p.codigo === 'PM-04') cargarModulosInsumos(p.id);
   if (p.codigo === 'PM-05') cargarModulosLogistica(p.id);
   if (p.codigo === 'PA-01') cargarModulosFinanciero(p.id);
+  if (p.codigo === 'PA-02') cargarModulosTalentoHumano(p.id);
+  if (p.codigo === 'PA-05') cargarModulosTecnologia(p.id);
+  if (p.codigo === 'PA-06') cargarModulosDocumental(p.id);
+  if (p.codigo === 'PA-07') cargarModulosSst(p.id);
 }
 
 function renderSeccionesRelacionadas(p) {
@@ -1957,6 +1961,491 @@ function abrirFormCierre(procesoId, cierreExistente) {
     }
     cerrarForm();
     cargarModulosFinanciero(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULOS DE TALENTO HUMANO (PA-02) ---------------- */
+async function cargarModulosTalentoHumano(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const [{ data: competencias }, { data: evaluaciones }] = await Promise.all([
+    supabase.from('competencias_empleado').select('*').eq('proceso_id', procesoId).order('empleado'),
+    supabase.from('evaluaciones_desempeno').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+  ]);
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Matriz de competencias</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-competencia">+ Agregar competencia</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Empleado</th><th>Rol</th><th>Competencia</th><th>Nivel requerido</th><th>Nivel actual</th><th></th></tr></thead>
+        <tbody>
+          ${(competencias || []).map(c => `
+            <tr>
+              <td>${c.empleado}</td>
+              <td>${c.rol || '—'}</td>
+              <td>${c.competencia}</td>
+              <td class="mono">${c.nivel_requerido ?? '—'}/5</td>
+              <td class="mono" style="${c.nivel_actual != null && c.nivel_requerido != null && c.nivel_actual < c.nivel_requerido ? 'color:var(--rojo);font-weight:700;' : ''}">${c.nivel_actual ?? '—'}/5</td>
+              <td><button type="button" class="btn-editar-fila btn-editar-competencia" data-id="${c.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin competencias registradas todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bloque-titulo">Evaluaciones de desempeño</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-evaluacion-desempeno">+ Nueva evaluación</button></div>
+      ${(evaluaciones || []).map(e => `
+        <div class="fila-revision">
+          <div class="fecha-rev">${e.fecha} · ${e.empleado}${e.evaluador ? ' · evaluó: ' + e.evaluador : ''}</div>
+          ${e.fortalezas ? `<div class="campo-rev"><b>Fortalezas</b>${e.fortalezas}</div>` : ''}
+          ${e.areas_mejora ? `<div class="campo-rev"><b>Áreas de mejora</b>${e.areas_mejora}</div>` : ''}
+          ${e.plan_accion ? `<div class="campo-rev"><b>Plan de acción</b>${e.plan_accion}</div>` : ''}
+        </div>`).join('') || '<div class="sin-relacionados">Sin evaluaciones registradas todavía.</div>'}
+    </div>`;
+
+  document.getElementById('btn-nueva-competencia').addEventListener('click', () => abrirFormCompetencia(procesoId));
+  bloque.querySelectorAll('.btn-editar-competencia').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormCompetencia(procesoId, (competencias || []).find(c => c.id === btn.dataset.id)));
+  });
+  document.getElementById('btn-nueva-evaluacion-desempeno').addEventListener('click', () => abrirFormEvaluacionDesempeno(procesoId));
+}
+
+function abrirFormCompetencia(procesoId, competenciaExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = competenciaExistente ? 'Editar competencia' : 'Agregar competencia';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Empleado</label><input type="text" id="f-empleado-c" required value="${competenciaExistente ? (competenciaExistente.empleado||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Rol</label><input type="text" id="f-rol-c" value="${competenciaExistente ? (competenciaExistente.rol||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: Líder de taller, Cajera..." /></div>
+    <div class="campo"><label>Competencia</label><input type="text" id="f-competencia-c" required value="${competenciaExistente ? (competenciaExistente.competencia||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: Técnica de amigurumi avanzada" /></div>
+    <div class="campo"><label>Nivel requerido (1-5)</label><input type="number" min="1" max="5" id="f-nivel-req-c" value="${competenciaExistente && competenciaExistente.nivel_requerido != null ? competenciaExistente.nivel_requerido : ''}" /></div>
+    <div class="campo"><label>Nivel actual (1-5)</label><input type="number" min="1" max="5" id="f-nivel-act-c" value="${competenciaExistente && competenciaExistente.nivel_actual != null ? competenciaExistente.nivel_actual : ''}" /></div>
+    <div class="campo"><label>Evidencia</label><textarea id="f-evidencia-c" placeholder="Cómo se sabe que tiene ese nivel — experiencia, formación, observación...">${competenciaExistente ? (competenciaExistente.evidencia || '') : ''}</textarea></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      empleado: document.getElementById('f-empleado-c').value,
+      rol: document.getElementById('f-rol-c').value,
+      competencia: document.getElementById('f-competencia-c').value,
+      nivel_requerido: document.getElementById('f-nivel-req-c').value || null,
+      nivel_actual: document.getElementById('f-nivel-act-c').value || null,
+      evidencia: document.getElementById('f-evidencia-c').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (competenciaExistente) {
+      await supabase.from('competencias_empleado').update(datos).eq('id', competenciaExistente.id);
+    } else {
+      await supabase.from('competencias_empleado').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosTalentoHumano(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+function abrirFormEvaluacionDesempeno(procesoId) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Nueva evaluación de desempeño';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Empleado</label><input type="text" id="f-empleado-ed" required /></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-ed" required value="${new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label>Fortalezas</label><textarea id="f-fortalezas-ed"></textarea></div>
+    <div class="campo"><label>Áreas de mejora</label><textarea id="f-areas-ed"></textarea></div>
+    <div class="campo"><label>Plan de acción</label><textarea id="f-plan-ed"></textarea></div>
+    <div class="campo"><label>Evaluador</label><input type="text" id="f-evaluador-ed" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('evaluaciones_desempeno').insert({
+      proceso_id: procesoId,
+      empleado: document.getElementById('f-empleado-ed').value,
+      fecha: document.getElementById('f-fecha-ed').value,
+      fortalezas: document.getElementById('f-fortalezas-ed').value,
+      areas_mejora: document.getElementById('f-areas-ed').value,
+      plan_accion: document.getElementById('f-plan-ed').value,
+      evaluador: document.getElementById('f-evaluador-ed').value
+    });
+    cerrarForm();
+    cargarModulosTalentoHumano(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULOS DE TECNOLOGÍA (PA-05) ---------------- */
+const ETIQUETAS_TIPO_ACTIVO = { sistema: 'Sistema', hosting: 'Hosting', base_datos: 'Base de datos', dominio: 'Dominio', servicio_externo: 'Servicio externo', otro: 'Otro' };
+const ETIQUETAS_CRITICIDAD = { baja: 'Baja', media: 'Media', alta: 'Alta' };
+
+async function cargarModulosTecnologia(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const [{ data: activos }, { data: incidentes }] = await Promise.all([
+    supabase.from('activos_tecnologicos').select('*').eq('proceso_id', procesoId).order('criticidad', { ascending: false }),
+    supabase.from('incidentes_tecnicos').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+  ]);
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Inventario de activos tecnológicos</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nuevo-activo">+ Nuevo activo</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Nombre</th><th>Tipo</th><th>Responsable</th><th>Criticidad</th><th></th></tr></thead>
+        <tbody>
+          ${(activos || []).map(a => `
+            <tr>
+              <td>${a.nombre}</td>
+              <td>${ETIQUETAS_TIPO_ACTIVO[a.tipo] || a.tipo}</td>
+              <td>${a.responsable || '—'}</td>
+              <td><span class="pill ${a.criticidad === 'alta' ? 'vencida' : a.criticidad === 'media' ? 'en_curso' : 'pendiente'}">${ETIQUETAS_CRITICIDAD[a.criticidad]}</span></td>
+              <td><button type="button" class="btn-editar-fila btn-editar-activo" data-id="${a.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin activos registrados todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bloque-titulo">Incidentes técnicos</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nuevo-incidente">+ Registrar incidente</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Fecha</th><th>Sistema afectado</th><th>Descripción</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+          ${(incidentes || []).map(i => `
+            <tr>
+              <td>${i.fecha}</td>
+              <td>${i.sistema_afectado || '—'}</td>
+              <td>${i.descripcion}</td>
+              <td>
+                <select class="select-estado pill ${i.estado === 'resuelto' ? 'cumplida' : 'vencida'}" data-id="${i.id}">
+                  <option value="abierto" ${i.estado==='abierto'?'selected':''}>Abierto</option>
+                  <option value="resuelto" ${i.estado==='resuelto'?'selected':''}>Resuelto</option>
+                </select>
+              </td>
+              <td><button type="button" class="btn-editar-fila btn-editar-incidente-tec" data-id="${i.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin incidentes registrados. ✓</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById('btn-nuevo-activo').addEventListener('click', () => abrirFormActivo(procesoId));
+  bloque.querySelectorAll('.btn-editar-activo').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormActivo(procesoId, (activos || []).find(a => a.id === btn.dataset.id)));
+  });
+  bloque.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      await supabase.from('incidentes_tecnicos').update({
+        estado: sel.value,
+        actualizado_en: new Date().toISOString(),
+        fecha_resolucion: sel.value === 'resuelto' ? new Date().toISOString().slice(0,10) : null
+      }).eq('id', sel.dataset.id);
+      cargarModulosTecnologia(procesoId);
+    });
+  });
+  document.getElementById('btn-nuevo-incidente').addEventListener('click', () => abrirFormIncidenteTecnico(procesoId));
+  bloque.querySelectorAll('.btn-editar-incidente-tec').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormIncidenteTecnico(procesoId, (incidentes || []).find(i => i.id === btn.dataset.id)));
+  });
+}
+
+function abrirFormActivo(procesoId, activoExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = activoExistente ? 'Editar activo tecnológico' : 'Nuevo activo tecnológico';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Nombre</label><input type="text" id="f-nombre-act" required value="${activoExistente ? (activoExistente.nombre||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Tipo</label><select id="f-tipo-act">
+      ${Object.entries(ETIQUETAS_TIPO_ACTIVO).map(([v,l]) => `<option value="${v}" ${activoExistente && activoExistente.tipo===v ? 'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable-act" value="${activoExistente ? (activoExistente.responsable||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>URL / ubicación</label><input type="text" id="f-url-act" value="${activoExistente ? (activoExistente.url_ubicacion||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Criticidad</label><select id="f-criticidad-act">
+      ${Object.entries(ETIQUETAS_CRITICIDAD).map(([v,l]) => `<option value="${v}" ${activoExistente && activoExistente.criticidad===v ? 'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Notas</label><textarea id="f-notas-act">${activoExistente ? (activoExistente.notas || '') : ''}</textarea></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      nombre: document.getElementById('f-nombre-act').value,
+      tipo: document.getElementById('f-tipo-act').value,
+      responsable: document.getElementById('f-responsable-act').value,
+      url_ubicacion: document.getElementById('f-url-act').value,
+      criticidad: document.getElementById('f-criticidad-act').value,
+      notas: document.getElementById('f-notas-act').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (activoExistente) {
+      await supabase.from('activos_tecnologicos').update(datos).eq('id', activoExistente.id);
+    } else {
+      await supabase.from('activos_tecnologicos').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosTecnologia(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+function abrirFormIncidenteTecnico(procesoId, incidenteExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = incidenteExistente ? 'Editar incidente técnico' : 'Registrar incidente técnico';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Sistema afectado</label><input type="text" id="f-sistema-inc" value="${incidenteExistente ? (incidenteExistente.sistema_afectado||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: SO, ERP, GitHub Pages..." /></div>
+    <div class="campo"><label>Descripción</label><textarea id="f-descripcion-inc-tec" required>${incidenteExistente ? (incidenteExistente.descripcion || '') : ''}</textarea></div>
+    <div class="campo"><label>Causa</label><textarea id="f-causa-inc-tec">${incidenteExistente ? (incidenteExistente.causa || '') : ''}</textarea></div>
+    <div class="campo"><label>Resolución</label><textarea id="f-resolucion-inc-tec">${incidenteExistente ? (incidenteExistente.resolucion || '') : ''}</textarea></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-inc-tec" value="${incidenteExistente && incidenteExistente.fecha ? incidenteExistente.fecha : new Date().toISOString().slice(0,10)}" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      sistema_afectado: document.getElementById('f-sistema-inc').value,
+      descripcion: document.getElementById('f-descripcion-inc-tec').value,
+      causa: document.getElementById('f-causa-inc-tec').value,
+      resolucion: document.getElementById('f-resolucion-inc-tec').value,
+      fecha: document.getElementById('f-fecha-inc-tec').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (incidenteExistente) {
+      await supabase.from('incidentes_tecnicos').update(datos).eq('id', incidenteExistente.id);
+    } else {
+      await supabase.from('incidentes_tecnicos').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosTecnologia(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULO DOCUMENTAL — HISTORIAL DE VERSIONES (PA-06) ---------------- */
+let documentoHistorialActual = null;
+
+async function cargarModulosDocumental(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  // Todos los documentos del sistema, sin importar de qué proceso salieron
+  // — la gestión documental controla el ciclo de vida de cualquier documento.
+  const { data: documentos } = await supabase.from('documentos').select('*, procesos(codigo)').order('nombre');
+  const { data: conteos } = await supabase.from('historial_versiones_documento').select('documento_id');
+  const contarVersiones = (id) => (conteos || []).filter(c => c.documento_id === id).length;
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Documentos del sistema</div>
+    <div class="panel-erp">
+      <table class="tabla-simple">
+        <thead><tr><th>Código</th><th>Nombre</th><th>Proceso</th><th>Versión actual</th><th>Estado</th><th>Historial</th></tr></thead>
+        <tbody>
+          ${(documentos || []).map(d => `
+            <tr>
+              <td class="mono">${d.codigo}</td>
+              <td>${d.nombre}</td>
+              <td>${d.procesos ? d.procesos.codigo : '—'}</td>
+              <td class="mono">${d.version}</td>
+              <td><span class="pill ${d.estado}">${d.estado}</span></td>
+              <td><button type="button" class="btn-ver-historial-doc" data-id="${d.id}" data-nombre="${d.nombre.replace(/"/g,'&quot;')}" style="border:none;background:none;color:var(--rosa-fuerte);font-weight:600;cursor:pointer;font-size:12.5px;">${contarVersiones(d.id)} versión(es) ›</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin documentos registrados todavía en ningún proceso.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bloque-titulo">Historial de versiones</div>
+    <div class="panel-erp" id="panel-historial-doc">
+      <div class="vacio-mini">Haz clic en "N versión(es) ›" de un documento para ver o agregar su historial.</div>
+    </div>`;
+
+  bloque.querySelectorAll('.btn-ver-historial-doc').forEach(btn => {
+    btn.addEventListener('click', () => cargarHistorialDocumento(btn.dataset.id, btn.dataset.nombre));
+  });
+
+  if (documentoHistorialActual) cargarHistorialDocumento(documentoHistorialActual.id, documentoHistorialActual.nombre);
+}
+
+async function cargarHistorialDocumento(documentoId, nombre) {
+  documentoHistorialActual = { id: documentoId, nombre };
+  const panel = document.getElementById('panel-historial-doc');
+  const { data: historial } = await supabase.from('historial_versiones_documento').select('*').eq('documento_id', documentoId).order('fecha', { ascending: false });
+
+  panel.innerHTML = `
+    <h3 style="margin-top:0;">${nombre}</h3>
+    ${(historial || []).map(h => `
+      <div class="fila-revision">
+        <div class="fecha-rev">Versión ${h.version} · ${h.fecha}${h.aprobado_por ? ' · aprobó: ' + h.aprobado_por : ''}</div>
+        ${h.cambios ? `<div class="campo-rev"><b>Cambios</b>${h.cambios}</div>` : ''}
+      </div>`).join('') || '<div class="sin-relacionados">Sin historial registrado todavía.</div>'}
+    <button type="button" class="btn-secundario" id="btn-nueva-version-doc" style="margin-top:10px;">+ Registrar nueva versión</button>`;
+
+  document.getElementById('btn-nueva-version-doc').addEventListener('click', () => abrirFormVersionDocumento(documentoId, nombre));
+}
+
+function abrirFormVersionDocumento(documentoId, nombre) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Nueva versión — ' + nombre;
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Versión</label><input type="text" id="f-version-doc" required placeholder="Ej: 1.1, 2.0..." /></div>
+    <div class="campo"><label>Qué cambió</label><textarea id="f-cambios-doc" required></textarea></div>
+    <div class="campo"><label>Aprobado por</label><input type="text" id="f-aprobo-doc" /></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-doc" required value="${new Date().toISOString().slice(0,10)}" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const nuevaVersion = document.getElementById('f-version-doc').value;
+    await supabase.from('historial_versiones_documento').insert({
+      documento_id: documentoId,
+      version: nuevaVersion,
+      cambios: document.getElementById('f-cambios-doc').value,
+      aprobado_por: document.getElementById('f-aprobo-doc').value,
+      fecha: document.getElementById('f-fecha-doc').value
+    });
+    // Actualiza también la versión "actual" que se ve en la tabla de Documentos.
+    await supabase.from('documentos').update({ version: nuevaVersion }).eq('id', documentoId);
+    cerrarForm();
+    const proc = cacheProcesos.find(x => x.codigo === 'PA-06');
+    if (proc) cargarModulosDocumental(proc.id);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULOS DE SST (PA-07) ---------------- */
+const ESTANDARES_SST = [
+  { campo: 'tecnico_sst_asignado', etiqueta: 'Técnico/a de SST asignado' },
+  { campo: 'afiliacion_seguridad_social', etiqueta: 'Afiliación a seguridad social integral' },
+  { campo: 'capacitacion_sst', etiqueta: 'Capacitación en SST realizada' },
+  { campo: 'plan_anual_trabajo', etiqueta: 'Plan anual de trabajo SST' },
+  { campo: 'evaluaciones_medicas', etiqueta: 'Evaluaciones médicas ocupacionales' },
+  { campo: 'identificacion_peligros', etiqueta: 'Identificación de peligros y riesgos' },
+  { campo: 'medidas_prevencion_control', etiqueta: 'Medidas de prevención y control' },
+];
+const ETIQUETAS_NIVEL_PELIGRO = { bajo: 'Bajo', medio: 'Medio', alto: 'Alto' };
+
+async function cargarModulosSst(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const [{ data: autoevaluaciones }, { data: peligros }] = await Promise.all([
+    supabase.from('sgsst_autoevaluacion').select('*').eq('proceso_id', procesoId).order('periodo', { ascending: false }),
+    supabase.from('identificacion_peligros').select('*').eq('proceso_id', procesoId).order('nivel', { ascending: false }),
+  ]);
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Autoevaluación SG-SST (7 estándares mínimos — Res. 0312 de 2019)</div>
+    <div class="panel-erp">
+      <p style="font-size:12.5px;color:var(--tinta-suave);margin-top:0;">Aplica a empresas de 10 o menos trabajadores con riesgo I, II o III — el caso de Lana Rosa. Se reporta al menos una vez al año.</p>
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-autoevaluacion">+ Nueva autoevaluación</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Período</th><th>Estándares cumplidos</th><th>Responsable</th><th>Fecha</th><th></th></tr></thead>
+        <tbody>
+          ${(autoevaluaciones || []).map(a => {
+            const cumplidos = ESTANDARES_SST.filter(e => a[e.campo]).length;
+            return `
+            <tr>
+              <td>${a.periodo}</td>
+              <td class="mono" style="${cumplidos < 7 ? 'color:var(--ambar);font-weight:700;' : 'color:var(--verde);font-weight:700;'}">${cumplidos}/7</td>
+              <td>${a.responsable || '—'}</td>
+              <td>${a.fecha}</td>
+              <td><button type="button" class="btn-editar-fila btn-editar-autoeval" data-id="${a.id}" title="Editar">✎</button></td>
+            </tr>`;
+          }).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin autoevaluaciones registradas todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bloque-titulo">Identificación de peligros y riesgos</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nuevo-peligro">+ Registrar peligro</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Peligro</th><th>Actividad</th><th>Nivel</th><th>Medida de control</th><th></th></tr></thead>
+        <tbody>
+          ${(peligros || []).map(p => `
+            <tr>
+              <td>${p.peligro}</td>
+              <td>${p.actividad || '—'}</td>
+              <td><span class="pill ${p.nivel === 'alto' ? 'vencida' : p.nivel === 'medio' ? 'en_curso' : 'cumplida'}">${ETIQUETAS_NIVEL_PELIGRO[p.nivel]}</span></td>
+              <td>${p.medida_control || '—'}</td>
+              <td><button type="button" class="btn-editar-fila btn-editar-peligro" data-id="${p.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin peligros registrados todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById('btn-nueva-autoevaluacion').addEventListener('click', () => abrirFormAutoevaluacionSst(procesoId));
+  bloque.querySelectorAll('.btn-editar-autoeval').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormAutoevaluacionSst(procesoId, (autoevaluaciones || []).find(a => a.id === btn.dataset.id)));
+  });
+  document.getElementById('btn-nuevo-peligro').addEventListener('click', () => abrirFormPeligro(procesoId));
+  bloque.querySelectorAll('.btn-editar-peligro').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormPeligro(procesoId, (peligros || []).find(p => p.id === btn.dataset.id)));
+  });
+}
+
+function abrirFormAutoevaluacionSst(procesoId, autoevalExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = autoevalExistente ? 'Editar autoevaluación SG-SST' : 'Nueva autoevaluación SG-SST';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Período</label><input type="text" id="f-periodo-sst" required value="${autoevalExistente ? (autoevalExistente.periodo||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: 2026" /></div>
+    ${ESTANDARES_SST.map(e => `<div class="campo"><label><input type="checkbox" id="f-${e.campo}" ${autoevalExistente && autoevalExistente[e.campo] ? 'checked' : ''} style="width:auto;margin-right:8px;" />${e.etiqueta}</label></div>`).join('')}
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable-sst" value="${autoevalExistente ? (autoevalExistente.responsable||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Observaciones</label><textarea id="f-observaciones-sst">${autoevalExistente ? (autoevalExistente.observaciones || '') : ''}</textarea></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-sst" value="${autoevalExistente && autoevalExistente.fecha ? autoevalExistente.fecha : new Date().toISOString().slice(0,10)}" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      periodo: document.getElementById('f-periodo-sst').value,
+      responsable: document.getElementById('f-responsable-sst').value,
+      observaciones: document.getElementById('f-observaciones-sst').value,
+      fecha: document.getElementById('f-fecha-sst').value,
+      actualizado_en: new Date().toISOString()
+    };
+    ESTANDARES_SST.forEach(e => { datos[e.campo] = document.getElementById('f-' + e.campo).checked; });
+    if (autoevalExistente) {
+      await supabase.from('sgsst_autoevaluacion').update(datos).eq('id', autoevalExistente.id);
+    } else {
+      await supabase.from('sgsst_autoevaluacion').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosSst(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+function abrirFormPeligro(procesoId, peligroExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = peligroExistente ? 'Editar peligro' : 'Registrar peligro';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Peligro</label><input type="text" id="f-peligro" required value="${peligroExistente ? (peligroExistente.peligro||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: Postura prolongada, punzocortante, cargas..." /></div>
+    <div class="campo"><label>Actividad / lugar</label><input type="text" id="f-actividad-pel" value="${peligroExistente ? (peligroExistente.actividad||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: Tejido en el taller" /></div>
+    <div class="campo"><label>Riesgo asociado</label><textarea id="f-riesgo-pel">${peligroExistente ? (peligroExistente.riesgo_asociado || '') : ''}</textarea></div>
+    <div class="campo"><label>Nivel</label><select id="f-nivel-pel">
+      ${Object.entries(ETIQUETAS_NIVEL_PELIGRO).map(([v,l]) => `<option value="${v}" ${peligroExistente && peligroExistente.nivel===v ? 'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Medida de control</label><textarea id="f-medida-pel" placeholder="Qué se hace para prevenirlo o reducirlo">${peligroExistente ? (peligroExistente.medida_control || '') : ''}</textarea></div>
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable-pel" value="${peligroExistente ? (peligroExistente.responsable||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      peligro: document.getElementById('f-peligro').value,
+      actividad: document.getElementById('f-actividad-pel').value,
+      riesgo_asociado: document.getElementById('f-riesgo-pel').value,
+      nivel: document.getElementById('f-nivel-pel').value,
+      medida_control: document.getElementById('f-medida-pel').value,
+      responsable: document.getElementById('f-responsable-pel').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (peligroExistente) {
+      await supabase.from('identificacion_peligros').update(datos).eq('id', peligroExistente.id);
+    } else {
+      await supabase.from('identificacion_peligros').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosSst(procesoId);
   };
   document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
