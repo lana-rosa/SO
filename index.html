@@ -732,6 +732,7 @@ function abrirDetalleProceso(id) {
 
   renderSeccionesRelacionadas(p);
   if (p.codigo === 'PE-01') cargarModulosEstrategicos(p.id);
+  if (p.codigo === 'PE-02') cargarModulosFinanciacion(p.id);
 }
 
 function renderSeccionesRelacionadas(p) {
@@ -924,6 +925,114 @@ function abrirFormNuevaRevision(procesoId) {
     });
     cerrarForm();
     cargarModulosEstrategicos(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULOS DE FINANCIACIÓN (PE-02) ---------------- */
+const ETIQUETAS_TIPO_FUENTE = { subvencion: 'Subvención', prestamo: 'Préstamo', capital_propio: 'Capital propio', inversionista: 'Inversionista', crowdfunding: 'Crowdfunding', leasing: 'Leasing', otro: 'Otro' };
+const ETIQUETAS_ESTADO_FUENTE = { prospeccion: 'Prospección', en_proceso: 'En proceso', aprobada: 'Aprobada', rechazada: 'Rechazada', activa: 'Activa', cerrada: 'Cerrada' };
+
+async function cargarModulosFinanciacion(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const { data: fuentes } = await supabase.from('fuentes_financiacion').select('*').eq('proceso_id', procesoId).order('creado_en', { ascending: false });
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Fondo Emprender — resumen</div>
+    <div class="panel-erp" id="panel-resumen-fe">
+      <div class="vacio-mini">Cargando datos del ERP…</div>
+    </div>
+
+    <div class="bloque-titulo">Fuentes de financiación</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-fuente">+ Nueva fuente</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Nombre</th><th>Tipo</th><th>Entidad</th><th>Monto</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+          ${(fuentes || []).map(f => `
+            <tr>
+              <td>${f.nombre}</td>
+              <td>${ETIQUETAS_TIPO_FUENTE[f.tipo] || f.tipo}</td>
+              <td>${f.entidad || '—'}</td>
+              <td>${f.monto ? formatoCOP(f.monto) : '—'}</td>
+              <td>
+                <select class="select-estado pill ${f.estado}" data-id="${f.id}">
+                  ${Object.entries(ETIQUETAS_ESTADO_FUENTE).map(([v,l]) => `<option value="${v}" ${f.estado===v?'selected':''}>${l}</option>`).join('')}
+                </select>
+              </td>
+              <td><button type="button" class="btn-editar-fila btn-editar-fuente" data-id="${f.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin fuentes de financiación todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+
+  // Resumen de Fondo Emprender, tomado en vivo del ERP (misma info que el Dashboard).
+  try {
+    const { saldo, proximos_hitos } = await erpFetch('/api/pos/so/fondo-emprender');
+    const panel = document.getElementById('panel-resumen-fe');
+    let html = '';
+    if (saldo && typeof saldo === 'object') {
+      html += Object.entries(saldo).filter(([, v]) => typeof v === 'number').slice(0, 3)
+        .map(([k, v]) => `<div class="fila-metrica"><span class="etq">${k.replace(/_/g, ' ')}</span><span class="val">${formatoCOP(v)}</span></div>`).join('');
+    }
+    if (proximos_hitos && proximos_hitos.length) {
+      html += '<div style="margin-top:10px;font-size:11px;font-weight:700;color:var(--tinta-suave);text-transform:uppercase;">Próximos vencimientos</div>' +
+        '<ul class="lista-alerta" style="margin-top:6px;">' + proximos_hitos.slice(0, 4).map(h =>
+          `<li class="${h.dias_restantes <= 7 ? 'urgente' : h.dias_restantes <= 20 ? 'atencion' : 'info'}">${h.nombre || h.descripcion || 'Hito'} — ${h.dias_restantes} día(s)</li>`
+        ).join('') + '</ul>';
+    }
+    html += '<div style="margin-top:12px;"><a href="https://lana-rosa.github.io/ERP/" target="_blank" rel="noopener" class="enlace-evidencia">Ver detalle completo en el ERP ↗</a></div>';
+    panel.innerHTML = html || '<div class="vacio-mini">Sin datos de Fondo Emprender todavía.</div>';
+  } catch (e) {
+    document.getElementById('panel-resumen-fe').innerHTML = '<div class="error-mini">No se pudo cargar el resumen del ERP.</div>';
+  }
+
+  bloque.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      await supabase.from('fuentes_financiacion').update({ estado: sel.value, actualizado_en: new Date().toISOString() }).eq('id', sel.dataset.id);
+      cargarModulosFinanciacion(procesoId);
+    });
+  });
+  document.getElementById('btn-nueva-fuente').addEventListener('click', () => abrirFormFuenteFinanciacion(procesoId));
+  bloque.querySelectorAll('.btn-editar-fuente').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormFuenteFinanciacion(procesoId, (fuentes || []).find(f => f.id === btn.dataset.id)));
+  });
+}
+
+function abrirFormFuenteFinanciacion(procesoId, fuenteExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = fuenteExistente ? 'Editar fuente de financiación' : 'Nueva fuente de financiación';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Nombre</label><input type="text" id="f-nombre" required value="${fuenteExistente ? (fuenteExistente.nombre||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: Crédito Bancolombia, Ángel inversionista..." /></div>
+    <div class="campo"><label>Tipo</label><select id="f-tipo">
+      ${Object.entries(ETIQUETAS_TIPO_FUENTE).map(([v,l]) => `<option value="${v}" ${fuenteExistente && fuenteExistente.tipo===v ? 'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Entidad</label><input type="text" id="f-entidad" value="${fuenteExistente ? (fuenteExistente.entidad||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: Bancolombia, SENA..." /></div>
+    <div class="campo"><label>Monto</label><input type="number" step="any" id="f-monto" value="${fuenteExistente && fuenteExistente.monto != null ? fuenteExistente.monto : ''}" /></div>
+    <div class="campo"><label>Fecha objetivo</label><input type="date" id="f-fecha-obj" value="${fuenteExistente && fuenteExistente.fecha_objetivo ? fuenteExistente.fecha_objetivo : ''}" /></div>
+    <div class="campo"><label>Notas</label><textarea id="f-notas">${fuenteExistente ? (fuenteExistente.notas || '') : ''}</textarea></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      nombre: document.getElementById('f-nombre').value,
+      tipo: document.getElementById('f-tipo').value,
+      entidad: document.getElementById('f-entidad').value,
+      monto: document.getElementById('f-monto').value || null,
+      fecha_objetivo: document.getElementById('f-fecha-obj').value || null,
+      notas: document.getElementById('f-notas').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (fuenteExistente) {
+      await supabase.from('fuentes_financiacion').update(datos).eq('id', fuenteExistente.id);
+    } else {
+      await supabase.from('fuentes_financiacion').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosFinanciacion(procesoId);
   };
   document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
