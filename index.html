@@ -736,6 +736,11 @@ function abrirDetalleProceso(id) {
   if (p.codigo === 'PE-03') cargarModulosAlianzas(p.id);
   if (p.codigo === 'PE-04') cargarModulosMarca(p.id);
   if (p.codigo === 'PM-01') cargarModulosVentas(p.id);
+  if (p.codigo === 'PM-02') cargarModulosProduccion(p.id);
+  if (p.codigo === 'PM-03') cargarModulosAcademy(p.id);
+  if (p.codigo === 'PM-04') cargarModulosInsumos(p.id);
+  if (p.codigo === 'PM-05') cargarModulosLogistica(p.id);
+  if (p.codigo === 'PA-01') cargarModulosFinanciero(p.id);
 }
 
 function renderSeccionesRelacionadas(p) {
@@ -1426,6 +1431,532 @@ function abrirFormMedicionSatisfaccion(procesoId) {
     });
     cerrarForm();
     cargarModulosVentas(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULO DE PRODUCCIÓN — NO CONFORMIDADES (PM-02) ---------------- */
+const ETIQUETAS_DECISION_NC = { reproceso: 'Reproceso', descarte: 'Descarte', aceptado_con_concesion: 'Aceptado con concesión', informado_cliente: 'Informado al cliente' };
+
+async function cargarModulosProduccion(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const { data: noConformidades } = await supabase.from('no_conformidades').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false });
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">No conformidades / Control de calidad</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-nc">+ Registrar no conformidad</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Fecha</th><th>Pieza / pedido</th><th>Defecto</th><th>Decisión</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+          ${(noConformidades || []).map(n => `
+            <tr>
+              <td>${n.fecha}</td>
+              <td>${n.pieza_pedido || '—'}</td>
+              <td>${n.defecto}</td>
+              <td>${ETIQUETAS_DECISION_NC[n.decision] || n.decision}</td>
+              <td>
+                <select class="select-estado pill ${n.estado === 'cerrada' ? 'cumplida' : 'pendiente'}" data-id="${n.id}">
+                  <option value="abierta" ${n.estado==='abierta'?'selected':''}>Abierta</option>
+                  <option value="cerrada" ${n.estado==='cerrada'?'selected':''}>Cerrada</option>
+                </select>
+              </td>
+              <td><button type="button" class="btn-editar-fila btn-editar-nc" data-id="${n.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin no conformidades registradas. ✓</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+
+  bloque.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      await supabase.from('no_conformidades').update({
+        estado: sel.value,
+        actualizado_en: new Date().toISOString(),
+        fecha_cierre: sel.value === 'cerrada' ? new Date().toISOString().slice(0,10) : null
+      }).eq('id', sel.dataset.id);
+      cargarModulosProduccion(procesoId);
+    });
+  });
+  document.getElementById('btn-nueva-nc').addEventListener('click', () => abrirFormNoConformidad(procesoId));
+  bloque.querySelectorAll('.btn-editar-nc').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormNoConformidad(procesoId, (noConformidades || []).find(n => n.id === btn.dataset.id)));
+  });
+}
+
+function abrirFormNoConformidad(procesoId, ncExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = ncExistente ? 'Editar no conformidad' : 'Registrar no conformidad';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Pieza / pedido</label><input type="text" id="f-pieza-nc" value="${ncExistente ? (ncExistente.pieza_pedido||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: LR-2026-045" /></div>
+    <div class="campo"><label>Defecto</label><textarea id="f-defecto-nc" required placeholder="Qué está mal — puntada suelta, medida incorrecta, color diferente...">${ncExistente ? (ncExistente.defecto || '') : ''}</textarea></div>
+    <div class="campo"><label>Causa raíz</label><textarea id="f-causa-nc" placeholder="Por qué pasó">${ncExistente ? (ncExistente.causa_raiz || '') : ''}</textarea></div>
+    <div class="campo"><label>Decisión</label><select id="f-decision-nc">
+      ${Object.entries(ETIQUETAS_DECISION_NC).map(([v,l]) => `<option value="${v}" ${ncExistente && ncExistente.decision===v ? 'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Responsable de la decisión</label><input type="text" id="f-responsable-nc" value="${ncExistente ? (ncExistente.responsable||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-nc" value="${ncExistente && ncExistente.fecha ? ncExistente.fecha : new Date().toISOString().slice(0,10)}" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      pieza_pedido: document.getElementById('f-pieza-nc').value,
+      defecto: document.getElementById('f-defecto-nc').value,
+      causa_raiz: document.getElementById('f-causa-nc').value,
+      decision: document.getElementById('f-decision-nc').value,
+      responsable: document.getElementById('f-responsable-nc').value,
+      fecha: document.getElementById('f-fecha-nc').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (ncExistente) {
+      await supabase.from('no_conformidades').update(datos).eq('id', ncExistente.id);
+    } else {
+      await supabase.from('no_conformidades').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosProduccion(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULOS DE FORMACIÓN — LANA ROSA ACADEMY (PM-03) ---------------- */
+const ETIQUETAS_NIVEL_CURSO = { principiante: 'Principiante', intermedio: 'Intermedio', avanzado: 'Avanzado' };
+const ETIQUETAS_ESTADO_CURSO = { en_diseno: 'En diseño', activo: 'Activo', descontinuado: 'Descontinuado' };
+let cursoEvaluacionesActual = null;
+
+async function cargarModulosAcademy(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const { data: cursos } = await supabase.from('cursos_academy').select('*').eq('proceso_id', procesoId).order('nombre');
+  const { data: conteos } = await supabase.from('evaluaciones_academy').select('curso_id');
+  const contarEvaluaciones = (id) => (conteos || []).filter(c => c.curso_id === id).length;
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Catálogo de cursos</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nuevo-curso">+ Nuevo curso</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Nombre</th><th>Nivel</th><th>Duración</th><th>Estado</th><th>Evaluaciones</th><th></th></tr></thead>
+        <tbody>
+          ${(cursos || []).map(c => `
+            <tr>
+              <td>${c.nombre}</td>
+              <td>${ETIQUETAS_NIVEL_CURSO[c.nivel] || c.nivel}</td>
+              <td>${c.duracion_horas ? c.duracion_horas + ' h' : '—'}</td>
+              <td>
+                <select class="select-estado pill ${c.estado === 'activo' ? 'cumplida' : c.estado === 'descontinuado' ? 'cancelada' : 'pendiente'}" data-id="${c.id}">
+                  ${Object.entries(ETIQUETAS_ESTADO_CURSO).map(([v,l]) => `<option value="${v}" ${c.estado===v?'selected':''}>${l}</option>`).join('')}
+                </select>
+              </td>
+              <td><button type="button" class="btn-ver-evaluaciones" data-id="${c.id}" data-nombre="${c.nombre.replace(/"/g,'&quot;')}" style="border:none;background:none;color:var(--rosa-fuerte);font-weight:600;cursor:pointer;font-size:12.5px;">${contarEvaluaciones(c.id)} registro(s) ›</button></td>
+              <td><button type="button" class="btn-editar-fila btn-editar-curso" data-id="${c.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin cursos todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bloque-titulo">Evaluación de aprendizaje y satisfacción</div>
+    <div class="panel-erp" id="panel-evaluaciones-curso">
+      <div class="vacio-mini">Haz clic en "N registro(s) ›" de un curso para ver o agregar sus evaluaciones.</div>
+    </div>`;
+
+  bloque.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      await supabase.from('cursos_academy').update({ estado: sel.value, actualizado_en: new Date().toISOString() }).eq('id', sel.dataset.id);
+      cargarModulosAcademy(procesoId);
+    });
+  });
+  document.getElementById('btn-nuevo-curso').addEventListener('click', () => abrirFormCurso(procesoId));
+  bloque.querySelectorAll('.btn-editar-curso').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormCurso(procesoId, (cursos || []).find(c => c.id === btn.dataset.id)));
+  });
+  bloque.querySelectorAll('.btn-ver-evaluaciones').forEach(btn => {
+    btn.addEventListener('click', () => cargarEvaluacionesCurso(procesoId, btn.dataset.id, btn.dataset.nombre));
+  });
+
+  if (cursoEvaluacionesActual) cargarEvaluacionesCurso(procesoId, cursoEvaluacionesActual.id, cursoEvaluacionesActual.nombre);
+}
+
+async function cargarEvaluacionesCurso(procesoId, cursoId, nombre) {
+  cursoEvaluacionesActual = { id: cursoId, nombre };
+  const panel = document.getElementById('panel-evaluaciones-curso');
+  const { data: evaluaciones } = await supabase.from('evaluaciones_academy').select('*').eq('curso_id', cursoId).order('fecha', { ascending: false });
+
+  panel.innerHTML = `
+    <h3 style="margin-top:0;">${nombre}</h3>
+    ${(evaluaciones || []).map(ev => `
+      <div class="fila-revision">
+        <div class="fecha-rev">${ev.fecha}${ev.numero_estudiantes ? ' · ' + ev.numero_estudiantes + ' estudiante(s)' : ''}${ev.satisfaccion_promedio != null ? ' · satisfacción: ' + ev.satisfaccion_promedio : ''}</div>
+        ${ev.resultado_aprendizaje ? `<div class="campo-rev"><b>Resultado</b>${ev.resultado_aprendizaje}</div>` : ''}
+        ${ev.comentarios ? `<div class="campo-rev"><b>Comentarios</b>${ev.comentarios}</div>` : ''}
+      </div>`).join('') || '<div class="sin-relacionados">Sin evaluaciones todavía.</div>'}
+    <button type="button" class="btn-secundario" id="btn-nueva-evaluacion" style="margin-top:10px;">+ Registrar evaluación</button>`;
+
+  document.getElementById('btn-nueva-evaluacion').addEventListener('click', () => abrirFormEvaluacionCurso(procesoId, cursoId, nombre));
+}
+
+function abrirFormCurso(procesoId, cursoExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = cursoExistente ? 'Editar curso' : 'Nuevo curso';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Nombre del curso</label><input type="text" id="f-nombre-curso" required value="${cursoExistente ? (cursoExistente.nombre||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: Crochet básico para principiantes" /></div>
+    <div class="campo"><label>Nivel</label><select id="f-nivel-curso">
+      ${Object.entries(ETIQUETAS_NIVEL_CURSO).map(([v,l]) => `<option value="${v}" ${cursoExistente && cursoExistente.nivel===v ? 'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Objetivos de aprendizaje</label><textarea id="f-objetivos-curso" placeholder="Qué va a saber hacer el estudiante al terminar">${cursoExistente ? (cursoExistente.objetivos_aprendizaje || '') : ''}</textarea></div>
+    <div class="campo"><label>Temario</label><textarea id="f-temario-curso">${cursoExistente ? (cursoExistente.temario || '') : ''}</textarea></div>
+    <div class="campo"><label>Materiales requeridos</label><textarea id="f-materiales-curso">${cursoExistente ? (cursoExistente.materiales_requeridos || '') : ''}</textarea></div>
+    <div class="campo"><label>Duración (horas)</label><input type="number" step="any" id="f-duracion-curso" value="${cursoExistente && cursoExistente.duracion_horas != null ? cursoExistente.duracion_horas : ''}" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      nombre: document.getElementById('f-nombre-curso').value,
+      nivel: document.getElementById('f-nivel-curso').value,
+      objetivos_aprendizaje: document.getElementById('f-objetivos-curso').value,
+      temario: document.getElementById('f-temario-curso').value,
+      materiales_requeridos: document.getElementById('f-materiales-curso').value,
+      duracion_horas: document.getElementById('f-duracion-curso').value || null,
+      actualizado_en: new Date().toISOString()
+    };
+    if (cursoExistente) {
+      await supabase.from('cursos_academy').update(datos).eq('id', cursoExistente.id);
+    } else {
+      await supabase.from('cursos_academy').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosAcademy(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+function abrirFormEvaluacionCurso(procesoId, cursoId, nombre) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Nueva evaluación — ' + nombre;
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-ev" required value="${new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label>Número de estudiantes</label><input type="number" id="f-num-est" /></div>
+    <div class="campo"><label>Resultado de aprendizaje</label><textarea id="f-resultado-ev" placeholder="¿Lograron el objetivo del curso?"></textarea></div>
+    <div class="campo"><label>Satisfacción promedio (1-5)</label><input type="number" step="0.1" min="1" max="5" id="f-satisfaccion-ev" /></div>
+    <div class="campo"><label>Comentarios</label><textarea id="f-comentarios-ev"></textarea></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('evaluaciones_academy').insert({
+      curso_id: cursoId,
+      fecha: document.getElementById('f-fecha-ev').value,
+      numero_estudiantes: document.getElementById('f-num-est').value || null,
+      resultado_aprendizaje: document.getElementById('f-resultado-ev').value,
+      satisfaccion_promedio: document.getElementById('f-satisfaccion-ev').value || null,
+      comentarios: document.getElementById('f-comentarios-ev').value
+    });
+    cerrarForm();
+    cargarModulosAcademy(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULO DE INSUMOS — EVALUACIÓN DE PROVEEDORES (PM-04) ---------------- */
+const ETIQUETAS_ESTADO_PROVEEDOR = { activo: 'Activo', en_evaluacion: 'En evaluación', pausado: 'Pausado', descartado: 'Descartado' };
+let proveedorEvaluacionesActual = null;
+
+async function cargarModulosInsumos(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const { data: proveedores } = await supabase.from('proveedores_insumos').select('*').eq('proceso_id', procesoId).order('nombre');
+  const { data: conteos } = await supabase.from('evaluaciones_proveedor').select('proveedor_id, calidad, precio, tiempo_entrega, servicio');
+  const promedioProveedor = (id) => {
+    const evs = (conteos || []).filter(c => c.proveedor_id === id);
+    if (!evs.length) return null;
+    const suma = evs.reduce((acc, e) => acc + ((e.calidad||0)+(e.precio||0)+(e.tiempo_entrega||0)+(e.servicio||0))/4, 0);
+    return (suma / evs.length).toFixed(1);
+  };
+  const contarEvaluaciones = (id) => (conteos || []).filter(c => c.proveedor_id === id).length;
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Proveedores de insumos</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nuevo-proveedor">+ Nuevo proveedor</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Nombre</th><th>Qué provee</th><th>Estado</th><th>Calificación prom.</th><th>Evaluaciones</th><th></th></tr></thead>
+        <tbody>
+          ${(proveedores || []).map(p => `
+            <tr>
+              <td>${p.nombre}</td>
+              <td>${p.que_provee || '—'}</td>
+              <td>
+                <select class="select-estado pill ${p.estado === 'activo' ? 'cumplida' : p.estado === 'descartado' ? 'cancelada' : 'pendiente'}" data-id="${p.id}">
+                  ${Object.entries(ETIQUETAS_ESTADO_PROVEEDOR).map(([v,l]) => `<option value="${v}" ${p.estado===v?'selected':''}>${l}</option>`).join('')}
+                </select>
+              </td>
+              <td class="mono">${promedioProveedor(p.id) ?? '—'}</td>
+              <td><button type="button" class="btn-ver-evaluaciones-prov" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}" style="border:none;background:none;color:var(--rosa-fuerte);font-weight:600;cursor:pointer;font-size:12.5px;">${contarEvaluaciones(p.id)} registro(s) ›</button></td>
+              <td><button type="button" class="btn-editar-fila btn-editar-proveedor" data-id="${p.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin proveedores registrados todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bloque-titulo">Historial de evaluaciones</div>
+    <div class="panel-erp" id="panel-evaluaciones-proveedor">
+      <div class="vacio-mini">Haz clic en "N registro(s) ›" de un proveedor para ver o agregar evaluaciones.</div>
+    </div>`;
+
+  bloque.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      await supabase.from('proveedores_insumos').update({ estado: sel.value, actualizado_en: new Date().toISOString() }).eq('id', sel.dataset.id);
+      cargarModulosInsumos(procesoId);
+    });
+  });
+  document.getElementById('btn-nuevo-proveedor').addEventListener('click', () => abrirFormProveedor(procesoId));
+  bloque.querySelectorAll('.btn-editar-proveedor').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormProveedor(procesoId, (proveedores || []).find(p => p.id === btn.dataset.id)));
+  });
+  bloque.querySelectorAll('.btn-ver-evaluaciones-prov').forEach(btn => {
+    btn.addEventListener('click', () => cargarEvaluacionesProveedor(procesoId, btn.dataset.id, btn.dataset.nombre));
+  });
+
+  if (proveedorEvaluacionesActual) cargarEvaluacionesProveedor(procesoId, proveedorEvaluacionesActual.id, proveedorEvaluacionesActual.nombre);
+}
+
+async function cargarEvaluacionesProveedor(procesoId, proveedorId, nombre) {
+  proveedorEvaluacionesActual = { id: proveedorId, nombre };
+  const panel = document.getElementById('panel-evaluaciones-proveedor');
+  const { data: evaluaciones } = await supabase.from('evaluaciones_proveedor').select('*').eq('proveedor_id', proveedorId).order('fecha', { ascending: false });
+
+  panel.innerHTML = `
+    <h3 style="margin-top:0;">${nombre}</h3>
+    ${(evaluaciones || []).map(ev => `
+      <div class="fila-revision">
+        <div class="fecha-rev">${ev.fecha}</div>
+        <div class="campo-rev"><b>Calidad</b>${ev.calidad ?? '—'}/5 · <b>Precio</b>${ev.precio ?? '—'}/5 · <b>Entrega</b>${ev.tiempo_entrega ?? '—'}/5 · <b>Servicio</b>${ev.servicio ?? '—'}/5</div>
+        ${ev.notas ? `<div class="campo-rev"><b>Notas</b>${ev.notas}</div>` : ''}
+      </div>`).join('') || '<div class="sin-relacionados">Sin evaluaciones todavía.</div>'}
+    <button type="button" class="btn-secundario" id="btn-nueva-evaluacion-prov" style="margin-top:10px;">+ Registrar evaluación</button>`;
+
+  document.getElementById('btn-nueva-evaluacion-prov').addEventListener('click', () => abrirFormEvaluacionProveedor(procesoId, proveedorId, nombre));
+}
+
+function abrirFormProveedor(procesoId, proveedorExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = proveedorExistente ? 'Editar proveedor' : 'Nuevo proveedor';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Nombre</label><input type="text" id="f-nombre-prov" required value="${proveedorExistente ? (proveedorExistente.nombre||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Qué provee</label><input type="text" id="f-que-provee" value="${proveedorExistente ? (proveedorExistente.que_provee||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: Lanas, agujas, ojos de seguridad..." /></div>
+    <div class="campo"><label>Contacto</label><input type="text" id="f-contacto-prov" value="${proveedorExistente ? (proveedorExistente.contacto||'').replace(/"/g,'&quot;') : ''}" placeholder="Nombre, WhatsApp o correo" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      nombre: document.getElementById('f-nombre-prov').value,
+      que_provee: document.getElementById('f-que-provee').value,
+      contacto: document.getElementById('f-contacto-prov').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (proveedorExistente) {
+      await supabase.from('proveedores_insumos').update(datos).eq('id', proveedorExistente.id);
+    } else {
+      await supabase.from('proveedores_insumos').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosInsumos(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+function abrirFormEvaluacionProveedor(procesoId, proveedorId, nombre) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Nueva evaluación — ' + nombre;
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-evp" required value="${new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label>Calidad (1-5)</label><input type="number" min="1" max="5" id="f-calidad-evp" required /></div>
+    <div class="campo"><label>Precio (1-5)</label><input type="number" min="1" max="5" id="f-precio-evp" required /></div>
+    <div class="campo"><label>Tiempo de entrega (1-5)</label><input type="number" min="1" max="5" id="f-entrega-evp" required /></div>
+    <div class="campo"><label>Servicio (1-5)</label><input type="number" min="1" max="5" id="f-servicio-evp" required /></div>
+    <div class="campo"><label>Notas</label><textarea id="f-notas-evp"></textarea></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('evaluaciones_proveedor').insert({
+      proveedor_id: proveedorId,
+      fecha: document.getElementById('f-fecha-evp').value,
+      calidad: document.getElementById('f-calidad-evp').value,
+      precio: document.getElementById('f-precio-evp').value,
+      tiempo_entrega: document.getElementById('f-entrega-evp').value,
+      servicio: document.getElementById('f-servicio-evp').value,
+      notas: document.getElementById('f-notas-evp').value
+    });
+    cerrarForm();
+    cargarModulosInsumos(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULO DE LOGÍSTICA — INCIDENCIAS DE ENVÍO (PM-05) ---------------- */
+const ETIQUETAS_TIPO_INCIDENCIA = { retraso: 'Retraso', 'dañado': 'Dañado', perdido: 'Perdido', direccion_incorrecta: 'Dirección incorrecta', otro: 'Otro' };
+const ETIQUETAS_ESTADO_INCIDENCIA = { abierta: 'Abierta', en_gestion: 'En gestión', resuelta: 'Resuelta', cerrada: 'Cerrada' };
+
+async function cargarModulosLogistica(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const { data: incidencias } = await supabase.from('incidencias_envio').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false });
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Incidencias de envío</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-incidencia">+ Registrar incidencia</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Fecha</th><th>Pedido</th><th>Transportadora</th><th>Tipo</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+          ${(incidencias || []).map(i => `
+            <tr>
+              <td>${i.fecha}</td>
+              <td>${i.pedido || '—'}</td>
+              <td>${i.transportadora || '—'}</td>
+              <td>${ETIQUETAS_TIPO_INCIDENCIA[i.tipo] || i.tipo}</td>
+              <td>
+                <select class="select-estado pill ${i.estado === 'resuelta' || i.estado === 'cerrada' ? 'cumplida' : i.estado === 'en_gestion' ? 'en_curso' : 'pendiente'}" data-id="${i.id}">
+                  ${Object.entries(ETIQUETAS_ESTADO_INCIDENCIA).map(([v,l]) => `<option value="${v}" ${i.estado===v?'selected':''}>${l}</option>`).join('')}
+                </select>
+              </td>
+              <td><button type="button" class="btn-editar-fila btn-editar-incidencia" data-id="${i.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin incidencias registradas. ✓</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+
+  bloque.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const cierraCaso = sel.value === 'resuelta' || sel.value === 'cerrada';
+      await supabase.from('incidencias_envio').update({
+        estado: sel.value,
+        actualizado_en: new Date().toISOString(),
+        fecha_cierre: cierraCaso ? new Date().toISOString().slice(0,10) : null
+      }).eq('id', sel.dataset.id);
+      cargarModulosLogistica(procesoId);
+    });
+  });
+  document.getElementById('btn-nueva-incidencia').addEventListener('click', () => abrirFormIncidencia(procesoId));
+  bloque.querySelectorAll('.btn-editar-incidencia').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormIncidencia(procesoId, (incidencias || []).find(i => i.id === btn.dataset.id)));
+  });
+}
+
+function abrirFormIncidencia(procesoId, incidenciaExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = incidenciaExistente ? 'Editar incidencia' : 'Registrar incidencia de envío';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Pedido</label><input type="text" id="f-pedido-inc" value="${incidenciaExistente ? (incidenciaExistente.pedido||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: LR-2026-045" /></div>
+    <div class="campo"><label>Transportadora</label><input type="text" id="f-transportadora-inc" value="${incidenciaExistente ? (incidenciaExistente.transportadora||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: Envia.com.co, Servientrega..." /></div>
+    <div class="campo"><label>Tipo</label><select id="f-tipo-inc">
+      ${Object.entries(ETIQUETAS_TIPO_INCIDENCIA).map(([v,l]) => `<option value="${v}" ${incidenciaExistente && incidenciaExistente.tipo===v ? 'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Descripción</label><textarea id="f-descripcion-inc">${incidenciaExistente ? (incidenciaExistente.descripcion || '') : ''}</textarea></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-inc" value="${incidenciaExistente && incidenciaExistente.fecha ? incidenciaExistente.fecha : new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label>Resolución</label><textarea id="f-resolucion-inc" placeholder="Qué se hizo para solucionarlo">${incidenciaExistente ? (incidenciaExistente.resolucion || '') : ''}</textarea></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      pedido: document.getElementById('f-pedido-inc').value,
+      transportadora: document.getElementById('f-transportadora-inc').value,
+      tipo: document.getElementById('f-tipo-inc').value,
+      descripcion: document.getElementById('f-descripcion-inc').value,
+      fecha: document.getElementById('f-fecha-inc').value,
+      resolucion: document.getElementById('f-resolucion-inc').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (incidenciaExistente) {
+      await supabase.from('incidencias_envio').update(datos).eq('id', incidenciaExistente.id);
+    } else {
+      await supabase.from('incidencias_envio').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosLogistica(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULO FINANCIERO — CIERRE MENSUAL (PA-01) ---------------- */
+async function cargarModulosFinanciero(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const { data: cierres } = await supabase.from('cierres_financieros').select('*').eq('proceso_id', procesoId).order('periodo', { ascending: false });
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Cierre financiero mensual</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nuevo-cierre">+ Nuevo cierre</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Período</th><th>Checklist</th><th>Responsable</th><th>Estado</th><th>Fecha de cierre</th><th></th></tr></thead>
+        <tbody>
+          ${(cierres || []).map(c => {
+            const hechos = [c.conciliacion_bancaria, c.declaraciones_al_dia, c.libros_actualizados].filter(Boolean).length;
+            return `
+            <tr>
+              <td>${c.periodo}</td>
+              <td class="mono">${hechos}/3</td>
+              <td>${c.responsable || '—'}</td>
+              <td><span class="pill ${c.estado === 'completado' ? 'cumplida' : 'pendiente'}">${c.estado === 'completado' ? 'completado' : 'pendiente'}</span></td>
+              <td>${c.fecha_cierre || '—'}</td>
+              <td><button type="button" class="btn-editar-fila btn-editar-cierre" data-id="${c.id}" title="Editar">✎</button></td>
+            </tr>`;
+          }).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin cierres registrados todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById('btn-nuevo-cierre').addEventListener('click', () => abrirFormCierre(procesoId));
+  bloque.querySelectorAll('.btn-editar-cierre').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormCierre(procesoId, (cierres || []).find(c => c.id === btn.dataset.id)));
+  });
+}
+
+function abrirFormCierre(procesoId, cierreExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = cierreExistente ? 'Editar cierre financiero' : 'Nuevo cierre financiero';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Período</label><input type="text" id="f-periodo-cf" required value="${cierreExistente ? (cierreExistente.periodo||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: Agosto 2026" /></div>
+    <div class="campo"><label><input type="checkbox" id="f-conciliacion-cf" ${cierreExistente && cierreExistente.conciliacion_bancaria ? 'checked' : ''} style="width:auto;margin-right:8px;" />Conciliación bancaria hecha</label></div>
+    <div class="campo"><label><input type="checkbox" id="f-declaraciones-cf" ${cierreExistente && cierreExistente.declaraciones_al_dia ? 'checked' : ''} style="width:auto;margin-right:8px;" />Declaraciones al día</label></div>
+    <div class="campo"><label><input type="checkbox" id="f-libros-cf" ${cierreExistente && cierreExistente.libros_actualizados ? 'checked' : ''} style="width:auto;margin-right:8px;" />Libros contables actualizados</label></div>
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable-cf" value="${cierreExistente ? (cierreExistente.responsable||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Observaciones</label><textarea id="f-observaciones-cf">${cierreExistente ? (cierreExistente.observaciones || '') : ''}</textarea></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const conciliacion = document.getElementById('f-conciliacion-cf').checked;
+    const declaraciones = document.getElementById('f-declaraciones-cf').checked;
+    const libros = document.getElementById('f-libros-cf').checked;
+    const completado = conciliacion && declaraciones && libros;
+    const datos = {
+      proceso_id: procesoId,
+      periodo: document.getElementById('f-periodo-cf').value,
+      conciliacion_bancaria: conciliacion,
+      declaraciones_al_dia: declaraciones,
+      libros_actualizados: libros,
+      responsable: document.getElementById('f-responsable-cf').value,
+      observaciones: document.getElementById('f-observaciones-cf').value,
+      estado: completado ? 'completado' : 'pendiente',
+      fecha_cierre: completado ? new Date().toISOString().slice(0,10) : null,
+      actualizado_en: new Date().toISOString()
+    };
+    if (cierreExistente) {
+      await supabase.from('cierres_financieros').update(datos).eq('id', cierreExistente.id);
+    } else {
+      await supabase.from('cierres_financieros').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosFinanciero(procesoId);
   };
   document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
