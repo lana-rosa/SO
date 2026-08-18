@@ -733,6 +733,7 @@ function abrirDetalleProceso(id) {
   renderSeccionesRelacionadas(p);
   if (p.codigo === 'PE-01') cargarModulosEstrategicos(p.id);
   if (p.codigo === 'PE-02') cargarModulosFinanciacion(p.id);
+  if (p.codigo === 'PE-03') cargarModulosAlianzas(p.id);
 }
 
 function renderSeccionesRelacionadas(p) {
@@ -1033,6 +1034,147 @@ function abrirFormFuenteFinanciacion(procesoId, fuenteExistente) {
     }
     cerrarForm();
     cargarModulosFinanciacion(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULOS DE ALIANZAS Y ECOSISTEMA (PE-03) ---------------- */
+const ETIQUETAS_TIPO_ALIANZA = { formacion: 'Formación', comercial: 'Comercial', institucional: 'Institucional', proveedor_estrategico: 'Proveedor estratégico', financiero: 'Financiero', otro: 'Otro' };
+const ETIQUETAS_ESTADO_ALIANZA = { prospeccion: 'Prospección', en_negociacion: 'En negociación', activa: 'Activa', pausada: 'Pausada', finalizada: 'Finalizada' };
+let alianzaBitacoraActual = null;
+
+async function cargarModulosAlianzas(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const { data: alianzas } = await supabase.from('alianzas').select('*').eq('proceso_id', procesoId).order('nombre');
+  const { data: conteos } = await supabase.from('seguimientos_alianza').select('alianza_id');
+  const contarSeguimientos = (id) => (conteos || []).filter(c => c.alianza_id === id).length;
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Directorio de alianzas</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-alianza">+ Nueva alianza</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Nombre</th><th>Tipo</th><th>Responsable</th><th>Estado</th><th>Bitácora</th><th></th></tr></thead>
+        <tbody>
+          ${(alianzas || []).map(a => `
+            <tr>
+              <td>${a.nombre}</td>
+              <td>${ETIQUETAS_TIPO_ALIANZA[a.tipo] || a.tipo}</td>
+              <td>${a.responsable_interno || '—'}</td>
+              <td>
+                <select class="select-estado pill ${a.estado}" data-id="${a.id}">
+                  ${Object.entries(ETIQUETAS_ESTADO_ALIANZA).map(([v,l]) => `<option value="${v}" ${a.estado===v?'selected':''}>${l}</option>`).join('')}
+                </select>
+              </td>
+              <td><button type="button" class="btn-ver-bitacora" data-id="${a.id}" data-nombre="${a.nombre.replace(/"/g,'&quot;')}" style="border:none;background:none;color:var(--rosa-fuerte);font-weight:600;cursor:pointer;font-size:12.5px;">${contarSeguimientos(a.id)} registro(s) ›</button></td>
+              <td><button type="button" class="btn-editar-fila btn-editar-alianza" data-id="${a.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin alianzas todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bloque-titulo">Bitácora de seguimiento</div>
+    <div class="panel-erp" id="panel-bitacora-alianza">
+      <div class="vacio-mini">Haz clic en "N registro(s) ›" de una alianza para ver o agregar su bitácora de seguimiento.</div>
+    </div>`;
+
+  bloque.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      await supabase.from('alianzas').update({ estado: sel.value, actualizado_en: new Date().toISOString() }).eq('id', sel.dataset.id);
+      cargarModulosAlianzas(procesoId);
+    });
+  });
+  document.getElementById('btn-nueva-alianza').addEventListener('click', () => abrirFormAlianza(procesoId));
+  bloque.querySelectorAll('.btn-editar-alianza').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormAlianza(procesoId, (alianzas || []).find(a => a.id === btn.dataset.id)));
+  });
+  bloque.querySelectorAll('.btn-ver-bitacora').forEach(btn => {
+    btn.addEventListener('click', () => cargarBitacoraAlianza(procesoId, btn.dataset.id, btn.dataset.nombre));
+  });
+
+  if (alianzaBitacoraActual) cargarBitacoraAlianza(procesoId, alianzaBitacoraActual.id, alianzaBitacoraActual.nombre);
+}
+
+async function cargarBitacoraAlianza(procesoId, alianzaId, nombre) {
+  alianzaBitacoraActual = { id: alianzaId, nombre };
+  const panel = document.getElementById('panel-bitacora-alianza');
+  const { data: seguimientos } = await supabase.from('seguimientos_alianza').select('*').eq('alianza_id', alianzaId).order('fecha', { ascending: false });
+
+  panel.innerHTML = `
+    <h3 style="margin-top:0;">${nombre}</h3>
+    <div id="lista-seguimientos-alianza">
+      ${(seguimientos || []).map(s => `
+        <div class="fila-revision">
+          <div class="fecha-rev">${s.fecha}${s.proximo_seguimiento ? ' · próximo: ' + s.proximo_seguimiento : ''}</div>
+          ${s.temas ? `<div class="campo-rev"><b>Temas</b>${s.temas}</div>` : ''}
+          ${s.decisiones ? `<div class="campo-rev"><b>Decisiones</b>${s.decisiones}</div>` : ''}
+        </div>`).join('') || '<div class="sin-relacionados">Sin registros todavía.</div>'}
+    </div>
+    <button type="button" class="btn-secundario" id="btn-nuevo-seguimiento-alianza" style="margin-top:10px;">+ Registrar seguimiento</button>`;
+
+  document.getElementById('btn-nuevo-seguimiento-alianza').addEventListener('click', () => abrirFormSeguimientoAlianza(procesoId, alianzaId, nombre));
+}
+
+function abrirFormAlianza(procesoId, alianzaExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = alianzaExistente ? 'Editar alianza' : 'Nueva alianza';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Nombre</label><input type="text" id="f-nombre" required value="${alianzaExistente ? (alianzaExistente.nombre||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: Cámara de Comercio de Manizales" /></div>
+    <div class="campo"><label>Tipo</label><select id="f-tipo">
+      ${Object.entries(ETIQUETAS_TIPO_ALIANZA).map(([v,l]) => `<option value="${v}" ${alianzaExistente && alianzaExistente.tipo===v ? 'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Objetivo mutuo</label><textarea id="f-objetivo-mutuo" placeholder="¿Qué gana Lana Rosa y qué gana el aliado?">${alianzaExistente ? (alianzaExistente.objetivo_mutuo || '') : ''}</textarea></div>
+    <div class="campo"><label>Responsable interno</label><input type="text" id="f-responsable-int" value="${alianzaExistente ? (alianzaExistente.responsable_interno||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Contacto externo</label><input type="text" id="f-contacto-ext" value="${alianzaExistente ? (alianzaExistente.contacto_externo||'').replace(/"/g,'&quot;') : ''}" placeholder="Nombre, correo o WhatsApp" /></div>
+    <div class="campo"><label>Fecha de inicio</label><input type="date" id="f-fecha-inicio" value="${alianzaExistente && alianzaExistente.fecha_inicio ? alianzaExistente.fecha_inicio : ''}" /></div>
+    <div class="campo"><label>Notas</label><textarea id="f-notas-alianza">${alianzaExistente ? (alianzaExistente.notas || '') : ''}</textarea></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      nombre: document.getElementById('f-nombre').value,
+      tipo: document.getElementById('f-tipo').value,
+      objetivo_mutuo: document.getElementById('f-objetivo-mutuo').value,
+      responsable_interno: document.getElementById('f-responsable-int').value,
+      contacto_externo: document.getElementById('f-contacto-ext').value,
+      fecha_inicio: document.getElementById('f-fecha-inicio').value || null,
+      notas: document.getElementById('f-notas-alianza').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (alianzaExistente) {
+      await supabase.from('alianzas').update(datos).eq('id', alianzaExistente.id);
+    } else {
+      await supabase.from('alianzas').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosAlianzas(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+function abrirFormSeguimientoAlianza(procesoId, alianzaId, nombre) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Nuevo seguimiento — ' + nombre;
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-seg" required value="${new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label>Temas tratados</label><textarea id="f-temas-seg" placeholder="Qué se conversó o avanzó"></textarea></div>
+    <div class="campo"><label>Decisiones y próximos pasos</label><textarea id="f-decisiones-seg"></textarea></div>
+    <div class="campo"><label>Próximo seguimiento</label><input type="date" id="f-proximo-seg" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('seguimientos_alianza').insert({
+      alianza_id: alianzaId,
+      fecha: document.getElementById('f-fecha-seg').value,
+      temas: document.getElementById('f-temas-seg').value,
+      decisiones: document.getElementById('f-decisiones-seg').value,
+      proximo_seguimiento: document.getElementById('f-proximo-seg').value || null
+    });
+    cerrarForm();
+    cargarModulosAlianzas(procesoId);
   };
   document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
