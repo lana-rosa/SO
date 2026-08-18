@@ -735,6 +735,7 @@ function abrirDetalleProceso(id) {
   if (p.codigo === 'PE-02') cargarModulosFinanciacion(p.id);
   if (p.codigo === 'PE-03') cargarModulosAlianzas(p.id);
   if (p.codigo === 'PE-04') cargarModulosMarca(p.id);
+  if (p.codigo === 'PM-01') cargarModulosVentas(p.id);
 }
 
 function renderSeccionesRelacionadas(p) {
@@ -1292,6 +1293,139 @@ function abrirFormSeguimientoMarca(procesoId) {
     });
     cerrarForm();
     cargarModulosMarca(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULOS DE VENTAS Y ATENCIÓN AL CLIENTE (PM-01) ---------------- */
+const ETIQUETAS_TIPO_QUEJA = { queja: 'Queja', reclamo: 'Reclamo', sugerencia: 'Sugerencia' };
+const ETIQUETAS_ESTADO_QUEJA = { recibida: 'Recibida', en_proceso: 'En proceso', resuelta: 'Resuelta', cerrada: 'Cerrada' };
+
+async function cargarModulosVentas(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const [{ data: quejas }, { data: satisfaccion }] = await Promise.all([
+    supabase.from('quejas_reclamos').select('*').eq('proceso_id', procesoId).order('fecha_recibida', { ascending: false }),
+    supabase.from('seguimientos_satisfaccion').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+  ]);
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Quejas y reclamos (PQRS)</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-queja">+ Nueva queja/reclamo</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Descripción</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+          ${(quejas || []).map(q => `
+            <tr>
+              <td>${q.fecha_recibida}</td>
+              <td>${q.cliente || '—'}</td>
+              <td>${ETIQUETAS_TIPO_QUEJA[q.tipo] || q.tipo}</td>
+              <td>${q.descripcion}</td>
+              <td>
+                <select class="select-estado pill ${q.estado === 'resuelta' || q.estado === 'cerrada' ? 'cumplida' : q.estado === 'en_proceso' ? 'en_curso' : 'pendiente'}" data-id="${q.id}">
+                  ${Object.entries(ETIQUETAS_ESTADO_QUEJA).map(([v,l]) => `<option value="${v}" ${q.estado===v?'selected':''}>${l}</option>`).join('')}
+                </select>
+              </td>
+              <td><button type="button" class="btn-editar-fila btn-editar-queja" data-id="${q.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin quejas ni reclamos registrados. ✓</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bloque-titulo">Seguimiento de satisfacción</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-medicion">+ Registrar medición</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Fecha</th><th>Métrica</th><th>Resultado</th><th>Notas</th></tr></thead>
+        <tbody>
+          ${(satisfaccion || []).map(s => `
+            <tr>
+              <td>${s.fecha}</td>
+              <td>${s.metrica.toUpperCase()}</td>
+              <td class="mono">${s.resultado ?? '—'}</td>
+              <td>${s.notas || '—'}</td>
+            </tr>`).join('') || '<tr><td colspan="4" style="color:#6b6270;">Sin mediciones registradas todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+
+  bloque.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const cierraCaso = sel.value === 'resuelta' || sel.value === 'cerrada';
+      await supabase.from('quejas_reclamos').update({
+        estado: sel.value,
+        actualizado_en: new Date().toISOString(),
+        fecha_cierre: cierraCaso ? new Date().toISOString().slice(0,10) : null
+      }).eq('id', sel.dataset.id);
+      cargarModulosVentas(procesoId);
+    });
+  });
+  document.getElementById('btn-nueva-queja').addEventListener('click', () => abrirFormQueja(procesoId));
+  bloque.querySelectorAll('.btn-editar-queja').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormQueja(procesoId, (quejas || []).find(q => q.id === btn.dataset.id)));
+  });
+  document.getElementById('btn-nueva-medicion').addEventListener('click', () => abrirFormMedicionSatisfaccion(procesoId));
+}
+
+function abrirFormQueja(procesoId, quejaExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = quejaExistente ? 'Editar queja/reclamo' : 'Nueva queja/reclamo';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Cliente</label><input type="text" id="f-cliente-q" value="${quejaExistente ? (quejaExistente.cliente||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Tipo</label><select id="f-tipo-q">
+      ${Object.entries(ETIQUETAS_TIPO_QUEJA).map(([v,l]) => `<option value="${v}" ${quejaExistente && quejaExistente.tipo===v ? 'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Descripción</label><textarea id="f-descripcion-q" required>${quejaExistente ? (quejaExistente.descripcion || '') : ''}</textarea></div>
+    <div class="campo"><label>Fecha recibida</label><input type="date" id="f-fecha-q" value="${quejaExistente && quejaExistente.fecha_recibida ? quejaExistente.fecha_recibida : new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label>Solución / respuesta</label><textarea id="f-solucion-q">${quejaExistente ? (quejaExistente.solucion || '') : ''}</textarea></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      cliente: document.getElementById('f-cliente-q').value,
+      tipo: document.getElementById('f-tipo-q').value,
+      descripcion: document.getElementById('f-descripcion-q').value,
+      fecha_recibida: document.getElementById('f-fecha-q').value,
+      solucion: document.getElementById('f-solucion-q').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (quejaExistente) {
+      await supabase.from('quejas_reclamos').update(datos).eq('id', quejaExistente.id);
+    } else {
+      await supabase.from('quejas_reclamos').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosVentas(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+function abrirFormMedicionSatisfaccion(procesoId) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Registrar medición de satisfacción';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-med" required value="${new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label>Métrica</label><select id="f-metrica-med">
+      <option value="nps">NPS (0-10, qué tan probable es que te recomienden)</option>
+      <option value="csat">CSAT (1-5, qué tan satisfecho quedó)</option>
+    </select></div>
+    <div class="campo"><label>Resultado</label><input type="number" step="any" id="f-resultado-med" required /></div>
+    <div class="campo"><label>Notas</label><textarea id="f-notas-med" placeholder="De cuántos clientes, comentarios relevantes..."></textarea></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('seguimientos_satisfaccion').insert({
+      proceso_id: procesoId,
+      fecha: document.getElementById('f-fecha-med').value,
+      metrica: document.getElementById('f-metrica-med').value,
+      resultado: document.getElementById('f-resultado-med').value,
+      notas: document.getElementById('f-notas-med').value
+    });
+    cerrarForm();
+    cargarModulosVentas(procesoId);
   };
   document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
