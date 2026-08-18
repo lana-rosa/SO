@@ -734,6 +734,7 @@ function abrirDetalleProceso(id) {
   if (p.codigo === 'PE-01') cargarModulosEstrategicos(p.id);
   if (p.codigo === 'PE-02') cargarModulosFinanciacion(p.id);
   if (p.codigo === 'PE-03') cargarModulosAlianzas(p.id);
+  if (p.codigo === 'PE-04') cargarModulosMarca(p.id);
 }
 
 function renderSeccionesRelacionadas(p) {
@@ -1175,6 +1176,122 @@ function abrirFormSeguimientoAlianza(procesoId, alianzaId, nombre) {
     });
     cerrarForm();
     cargarModulosAlianzas(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULOS DE MARCA Y POSICIONAMIENTO (PE-04) ---------------- */
+async function cargarModulosMarca(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const [{ data: pos }, { data: competidores }, { data: seguimientos }] = await Promise.all([
+    supabase.from('posicionamiento_marca').select('*').eq('proceso_id', procesoId).maybeSingle(),
+    supabase.from('analisis_competencia').select('*').eq('proceso_id', procesoId).order('creado_en', { ascending: false }),
+    supabase.from('seguimientos_marca').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+  ]);
+  const p = pos || {};
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Posicionamiento</div>
+    <div class="panel-erp">
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Declaración de posicionamiento</label>
+      <textarea id="pos-declaracion" placeholder="Cuando alguien piensa en [necesidad], quiere que piense en Lana Rosa Crochet porque...">${p.declaracion || ''}</textarea>
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Diferenciador clave</label>
+      <textarea id="pos-diferenciador" placeholder="Lo único que Lana Rosa tiene y la competencia no">${p.diferenciador_clave || ''}</textarea>
+      <button type="button" class="btn-secundario" id="btn-guardar-posicionamiento">Guardar posicionamiento</button>
+    </div>
+
+    <div class="bloque-titulo">Análisis de competencia</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nuevo-competidor">+ Agregar competidor</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Competidor</th><th>Qué ofrecen</th><th>Nuestro diferencial</th><th></th></tr></thead>
+        <tbody>
+          ${(competidores || []).map(c => `
+            <tr>
+              <td>${c.nombre_competidor}</td>
+              <td>${c.que_ofrecen || '—'}</td>
+              <td>${c.nuestro_diferencial || '—'}</td>
+              <td><button type="button" class="quitar btn-quitar-competidor" data-id="${c.id}" style="border:none;background:none;color:var(--tinta-suave);cursor:pointer;font-size:14px;">×</button></td>
+            </tr>`).join('') || '<tr><td colspan="4" style="color:#6b6270;">Sin competidores registrados todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bloque-titulo">Bitácora de seguimiento de marca</div>
+    <div class="panel-erp">
+      ${(seguimientos || []).map(s => `
+        <div class="fila-revision">
+          <div class="fecha-rev">${s.fecha}</div>
+          ${s.hallazgos ? `<div class="campo-rev"><b>Hallazgos</b>${s.hallazgos}</div>` : ''}
+          ${s.acciones ? `<div class="campo-rev"><b>Acciones</b>${s.acciones}</div>` : ''}
+        </div>`).join('') || '<div class="sin-relacionados">Sin registros todavía.</div>'}
+      <button type="button" class="btn-secundario" id="btn-nuevo-seguimiento-marca" style="margin-top:10px;">+ Registrar seguimiento</button>
+    </div>`;
+
+  document.getElementById('btn-guardar-posicionamiento').addEventListener('click', async () => {
+    await supabase.from('posicionamiento_marca').upsert({
+      proceso_id: procesoId,
+      declaracion: document.getElementById('pos-declaracion').value,
+      diferenciador_clave: document.getElementById('pos-diferenciador').value,
+      actualizado_en: new Date().toISOString()
+    }, { onConflict: 'proceso_id' });
+    cargarModulosMarca(procesoId);
+  });
+
+  document.getElementById('btn-nuevo-competidor').addEventListener('click', () => abrirFormCompetidor(procesoId));
+  bloque.querySelectorAll('.btn-quitar-competidor').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await supabase.from('analisis_competencia').delete().eq('id', btn.dataset.id);
+      cargarModulosMarca(procesoId);
+    });
+  });
+  document.getElementById('btn-nuevo-seguimiento-marca').addEventListener('click', () => abrirFormSeguimientoMarca(procesoId));
+}
+
+function abrirFormCompetidor(procesoId) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Nuevo competidor';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Nombre del competidor</label><input type="text" id="f-nombre-comp" required /></div>
+    <div class="campo"><label>Qué ofrecen</label><textarea id="f-que-ofrecen" placeholder="Producto, precio, estilo..."></textarea></div>
+    <div class="campo"><label>Nuestro diferencial frente a ellos</label><textarea id="f-nuestro-dif"></textarea></div>
+    <div class="campo"><label>Notas</label><textarea id="f-notas-comp"></textarea></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('analisis_competencia').insert({
+      proceso_id: procesoId,
+      nombre_competidor: document.getElementById('f-nombre-comp').value,
+      que_ofrecen: document.getElementById('f-que-ofrecen').value,
+      nuestro_diferencial: document.getElementById('f-nuestro-dif').value,
+      notas: document.getElementById('f-notas-comp').value
+    });
+    cerrarForm();
+    cargarModulosMarca(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+function abrirFormSeguimientoMarca(procesoId) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Nuevo seguimiento de marca';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-sm" required value="${new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label>Hallazgos</label><textarea id="f-hallazgos-sm" placeholder="Cómo va la percepción de marca, seguidores, comentarios..."></textarea></div>
+    <div class="campo"><label>Acciones a tomar</label><textarea id="f-acciones-sm"></textarea></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('seguimientos_marca').insert({
+      proceso_id: procesoId,
+      fecha: document.getElementById('f-fecha-sm').value,
+      hallazgos: document.getElementById('f-hallazgos-sm').value,
+      acciones: document.getElementById('f-acciones-sm').value
+    });
+    cerrarForm();
+    cargarModulosMarca(procesoId);
   };
   document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
