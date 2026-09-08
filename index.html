@@ -746,6 +746,7 @@ function abrirDetalleProceso(id) {
   if (p.codigo === 'PA-06') cargarModulosDocumental(p.id);
   if (p.codigo === 'PA-07') cargarModulosSst(p.id);
   if (p.codigo === 'PA-08') cargarModulosAmbiental(p.id);
+  if (p.codigo === 'PEM-01') cargarModulosIndicadoresProceso(p.id);
 }
 
 function renderSeccionesRelacionadas(p) {
@@ -2522,6 +2523,70 @@ function abrirFormAspectoAmbiental(procesoId, aspectoExistente) {
     }
     cerrarForm();
     cargarModulosAmbiental(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULO DE GESTIÓN DE INDICADORES (PEM-01) ---------------- */
+async function cargarModulosIndicadoresProceso(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  // Todos los indicadores del sistema (de cualquier proceso), para ver el
+  // panorama completo antes de la revisión — no se filtra solo por PEM-01.
+  const [{ data: todosIndicadores }, { data: revisiones }] = await Promise.all([
+    supabase.from('indicadores').select('*'),
+    supabase.from('revisiones_indicadores').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+  ]);
+  const verdes = (todosIndicadores || []).filter(k => k.semaforo === 'verde').length;
+  const amarillos = (todosIndicadores || []).filter(k => k.semaforo === 'amarillo').length;
+  const rojos = (todosIndicadores || []).filter(k => k.semaforo === 'rojo').length;
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Panorama actual de indicadores</div>
+    <div class="grid-erp">
+      <div class="panel-erp"><h3>En meta</h3><div class="fila-metrica"><span class="etq">Verde</span><span class="val pos">${verdes}</span></div></div>
+      <div class="panel-erp"><h3>En riesgo</h3><div class="fila-metrica"><span class="etq">Amarillo</span><span class="val">${amarillos}</span></div></div>
+      <div class="panel-erp"><h3>Fuera de meta</h3><div class="fila-metrica"><span class="etq">Rojo</span><span class="val neg">${rojos}</span></div></div>
+    </div>
+
+    <div class="bloque-titulo">Bitácora de revisión de indicadores</div>
+    <div class="panel-erp">
+      <p style="font-size:12.5px;color:var(--tinta-suave);margin-top:0;">Revisar periódicamente el conjunto de indicadores (no solo mirarlos uno por uno) y decidir qué hacer con los que están en riesgo o fuera de meta.</p>
+      ${(revisiones || []).map(r => `
+        <div class="fila-revision">
+          <div class="fecha-rev">${r.periodo} · ${r.fecha}${r.responsable ? ' · ' + r.responsable : ''}</div>
+          ${r.hallazgos ? `<div class="campo-rev"><b>Hallazgos</b>${r.hallazgos}</div>` : ''}
+          ${r.acciones ? `<div class="campo-rev"><b>Acciones</b>${r.acciones}</div>` : ''}
+        </div>`).join('') || '<div class="sin-relacionados">Sin revisiones registradas todavía.</div>'}
+      <button type="button" class="btn-secundario" id="btn-nueva-revision-indicadores" style="margin-top:10px;">+ Registrar revisión</button>
+    </div>`;
+
+  document.getElementById('btn-nueva-revision-indicadores').addEventListener('click', () => abrirFormRevisionIndicadores(procesoId));
+}
+
+function abrirFormRevisionIndicadores(procesoId) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Nueva revisión de indicadores';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Período</label><input type="text" id="f-periodo-ri" required placeholder="Ej: Q3 2026, Agosto 2026..." /></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-ri" required value="${new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label>Hallazgos</label><textarea id="f-hallazgos-ri" placeholder="Qué indicadores están fuera de meta y por qué"></textarea></div>
+    <div class="campo"><label>Acciones</label><textarea id="f-acciones-ri" placeholder="Qué se va a hacer al respecto"></textarea></div>
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable-ri" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('revisiones_indicadores').insert({
+      proceso_id: procesoId,
+      periodo: document.getElementById('f-periodo-ri').value,
+      fecha: document.getElementById('f-fecha-ri').value,
+      hallazgos: document.getElementById('f-hallazgos-ri').value,
+      acciones: document.getElementById('f-acciones-ri').value,
+      responsable: document.getElementById('f-responsable-ri').value
+    });
+    cerrarForm();
+    cargarModulosIndicadoresProceso(procesoId);
   };
   document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
