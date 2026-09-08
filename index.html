@@ -748,6 +748,7 @@ function abrirDetalleProceso(id) {
   if (p.codigo === 'PA-08') cargarModulosAmbiental(p.id);
   if (p.codigo === 'PEM-01') cargarModulosIndicadoresProceso(p.id);
   if (p.codigo === 'PEM-02') cargarModulosCalidad(p.id);
+  if (p.codigo === 'PEM-03') cargarModulosRiesgosTransversal(p.id);
 }
 
 function renderSeccionesRelacionadas(p) {
@@ -2746,6 +2747,89 @@ function abrirFormAccionCorrectiva(procesoId, accionExistente) {
     }
     cerrarForm();
     cargarModulosCalidad(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULO DE RIESGOS TRANSVERSAL (PEM-03) ---------------- */
+async function cargarModulosRiesgosTransversal(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  // Todos los riesgos del sistema (de cualquier proceso), para consolidar
+  // y priorizar — así es como se hace una matriz de riesgos según ISO 31000.
+  const [{ data: todosRiesgos }, { data: revisiones }] = await Promise.all([
+    supabase.from('riesgos').select('*, procesos(codigo)'),
+    supabase.from('revisiones_riesgos').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+  ]);
+  const activos = (todosRiesgos || []).filter(r => r.estado !== 'cerrado');
+  const nivelRiesgo = (r) => {
+    const pesoProb = { baja: 1, media: 2, alta: 3 }[r.probabilidad] || 0;
+    const pesoImp = { bajo: 1, medio: 2, alto: 3 }[r.impacto] || 0;
+    return pesoProb * pesoImp;
+  };
+  const prioritarios = [...activos].sort((a, b) => nivelRiesgo(b) - nivelRiesgo(a)).slice(0, 8);
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Matriz consolidada de riesgos (probabilidad × impacto)</div>
+    <div class="panel-erp">
+      <p style="font-size:12.5px;color:var(--tinta-suave);margin-top:0;">Los ${activos.length} riesgo(s) activo(s) de toda la empresa, ordenados de más a menos prioritario.</p>
+      <table class="tabla-simple">
+        <thead><tr><th>Descripción</th><th>Proceso</th><th>Probabilidad</th><th>Impacto</th><th>Prioridad</th></tr></thead>
+        <tbody>
+          ${prioritarios.map(r => {
+            const nivel = nivelRiesgo(r);
+            const claseNivel = nivel >= 6 ? 'vencida' : nivel >= 3 ? 'en_curso' : 'cumplida';
+            const etiquetaNivel = nivel >= 6 ? 'Alta' : nivel >= 3 ? 'Media' : 'Baja';
+            return `
+            <tr>
+              <td>${r.descripcion}</td>
+              <td>${r.procesos ? r.procesos.codigo : '—'}</td>
+              <td>${r.probabilidad || '—'}</td>
+              <td>${r.impacto || '—'}</td>
+              <td><span class="pill ${claseNivel}">${etiquetaNivel}</span></td>
+            </tr>`;
+          }).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin riesgos activos registrados en ningún proceso.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bloque-titulo">Bitácora de revisión de riesgos</div>
+    <div class="panel-erp">
+      ${(revisiones || []).map(r => `
+        <div class="fila-revision">
+          <div class="fecha-rev">${r.periodo} · ${r.fecha}${r.responsable ? ' · ' + r.responsable : ''}</div>
+          ${r.hallazgos ? `<div class="campo-rev"><b>Hallazgos</b>${r.hallazgos}</div>` : ''}
+          ${r.acciones ? `<div class="campo-rev"><b>Acciones</b>${r.acciones}</div>` : ''}
+        </div>`).join('') || '<div class="sin-relacionados">Sin revisiones registradas todavía.</div>'}
+      <button type="button" class="btn-secundario" id="btn-nueva-revision-riesgos" style="margin-top:10px;">+ Registrar revisión</button>
+    </div>`;
+
+  document.getElementById('btn-nueva-revision-riesgos').addEventListener('click', () => abrirFormRevisionRiesgos(procesoId));
+}
+
+function abrirFormRevisionRiesgos(procesoId) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Nueva revisión de riesgos';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Período</label><input type="text" id="f-periodo-rr" required placeholder="Ej: Q3 2026" /></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-rr" required value="${new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label>Hallazgos</label><textarea id="f-hallazgos-rr" placeholder="Qué riesgos son más urgentes y por qué"></textarea></div>
+    <div class="campo"><label>Acciones</label><textarea id="f-acciones-rr"></textarea></div>
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable-rr" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('revisiones_riesgos').insert({
+      proceso_id: procesoId,
+      periodo: document.getElementById('f-periodo-rr').value,
+      fecha: document.getElementById('f-fecha-rr').value,
+      hallazgos: document.getElementById('f-hallazgos-rr').value,
+      acciones: document.getElementById('f-acciones-rr').value,
+      responsable: document.getElementById('f-responsable-rr').value
+    });
+    cerrarForm();
+    cargarModulosRiesgosTransversal(procesoId);
   };
   document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
