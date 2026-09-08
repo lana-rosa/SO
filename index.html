@@ -749,6 +749,7 @@ function abrirDetalleProceso(id) {
   if (p.codigo === 'PEM-01') cargarModulosIndicadoresProceso(p.id);
   if (p.codigo === 'PEM-02') cargarModulosCalidad(p.id);
   if (p.codigo === 'PEM-03') cargarModulosRiesgosTransversal(p.id);
+  if (p.codigo === 'PEM-04') cargarModulosMejoraContinua(p.id);
 }
 
 function renderSeccionesRelacionadas(p) {
@@ -2830,6 +2831,91 @@ function abrirFormRevisionRiesgos(procesoId) {
     });
     cerrarForm();
     cargarModulosRiesgosTransversal(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULO DE MEJORA CONTINUA (PEM-04) ---------------- */
+const ETIQUETAS_ORIGEN_MEJORA = { auditoria: 'Auditoría', indicador: 'Indicador', riesgo: 'Riesgo', queja: 'Queja de cliente', sugerencia_equipo: 'Sugerencia del equipo', otro: 'Otro' };
+const ETIQUETAS_ESTADO_MEJORA = { identificada: 'Identificada', en_implementacion: 'En implementación', implementada: 'Implementada', descartada: 'Descartada' };
+
+async function cargarModulosMejoraContinua(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const { data: oportunidades } = await supabase.from('oportunidades_mejora').select('*').eq('proceso_id', procesoId).order('fecha_identificacion', { ascending: false });
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Banco de oportunidades de mejora</div>
+    <div class="panel-erp">
+      <p style="font-size:12.5px;color:var(--tinta-suave);margin-top:0;">Ideas de mejora de cualquier fuente — auditorías, indicadores, riesgos, quejas, o simplemente algo que se le ocurrió al equipo. Se le hace seguimiento hasta implementarla y verificar si sirvió.</p>
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-oportunidad">+ Nueva oportunidad</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Descripción</th><th>Origen</th><th>Responsable</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+          ${(oportunidades || []).map(o => `
+            <tr>
+              <td>${o.descripcion}</td>
+              <td>${ETIQUETAS_ORIGEN_MEJORA[o.origen] || o.origen}</td>
+              <td>${o.responsable || '—'}</td>
+              <td>
+                <select class="select-estado pill ${o.estado === 'implementada' ? 'cumplida' : o.estado === 'descartada' ? 'cancelada' : o.estado === 'en_implementacion' ? 'en_curso' : 'pendiente'}" data-id="${o.id}">
+                  ${Object.entries(ETIQUETAS_ESTADO_MEJORA).map(([v,l]) => `<option value="${v}" ${o.estado===v?'selected':''}>${l}</option>`).join('')}
+                </select>
+              </td>
+              <td><button type="button" class="btn-editar-fila btn-editar-oportunidad" data-id="${o.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin oportunidades de mejora registradas todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+
+  bloque.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const implementada = sel.value === 'implementada';
+      await supabase.from('oportunidades_mejora').update({
+        estado: sel.value,
+        actualizado_en: new Date().toISOString(),
+        fecha_implementacion: implementada ? new Date().toISOString().slice(0,10) : null
+      }).eq('id', sel.dataset.id);
+      cargarModulosMejoraContinua(procesoId);
+    });
+  });
+  document.getElementById('btn-nueva-oportunidad').addEventListener('click', () => abrirFormOportunidadMejora(procesoId));
+  bloque.querySelectorAll('.btn-editar-oportunidad').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormOportunidadMejora(procesoId, (oportunidades || []).find(o => o.id === btn.dataset.id)));
+  });
+}
+
+function abrirFormOportunidadMejora(procesoId, oportunidadExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = oportunidadExistente ? 'Editar oportunidad de mejora' : 'Nueva oportunidad de mejora';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Origen</label><select id="f-origen-om">
+      ${Object.entries(ETIQUETAS_ORIGEN_MEJORA).map(([v,l]) => `<option value="${v}" ${oportunidadExistente && oportunidadExistente.origen===v ? 'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Descripción</label><textarea id="f-descripcion-om" required>${oportunidadExistente ? (oportunidadExistente.descripcion || '') : ''}</textarea></div>
+    <div class="campo"><label>Beneficio esperado</label><textarea id="f-beneficio-om" placeholder="Qué mejoraría si se implementa">${oportunidadExistente ? (oportunidadExistente.beneficio_esperado || '') : ''}</textarea></div>
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable-om" value="${oportunidadExistente ? (oportunidadExistente.responsable||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Resultado obtenido</label><textarea id="f-resultado-om" placeholder="Una vez implementada, ¿de verdad sirvió?">${oportunidadExistente ? (oportunidadExistente.resultado_obtenido || '') : ''}</textarea></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      origen: document.getElementById('f-origen-om').value,
+      descripcion: document.getElementById('f-descripcion-om').value,
+      beneficio_esperado: document.getElementById('f-beneficio-om').value,
+      responsable: document.getElementById('f-responsable-om').value,
+      resultado_obtenido: document.getElementById('f-resultado-om').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (oportunidadExistente) {
+      await supabase.from('oportunidades_mejora').update(datos).eq('id', oportunidadExistente.id);
+    } else {
+      await supabase.from('oportunidades_mejora').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosMejoraContinua(procesoId);
   };
   document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
