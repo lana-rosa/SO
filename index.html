@@ -747,6 +747,7 @@ function abrirDetalleProceso(id) {
   if (p.codigo === 'PA-07') cargarModulosSst(p.id);
   if (p.codigo === 'PA-08') cargarModulosAmbiental(p.id);
   if (p.codigo === 'PEM-01') cargarModulosIndicadoresProceso(p.id);
+  if (p.codigo === 'PEM-02') cargarModulosCalidad(p.id);
 }
 
 function renderSeccionesRelacionadas(p) {
@@ -2587,6 +2588,164 @@ function abrirFormRevisionIndicadores(procesoId) {
     });
     cerrarForm();
     cargarModulosIndicadoresProceso(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULOS DE CALIDAD (PEM-02) ---------------- */
+const ETIQUETAS_ORIGEN_AC = { auditoria: 'Auditoría', queja: 'Queja de cliente', indicador: 'Indicador fuera de meta', no_conformidad_produccion: 'No conformidad de producción', otro: 'Otro' };
+
+async function cargarModulosCalidad(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const [{ data: auditorias }, { data: acciones }] = await Promise.all([
+    supabase.from('auditorias_internas').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+    supabase.from('acciones_correctivas').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+  ]);
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Auditorías internas</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-auditoria">+ Nueva auditoría</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Fecha</th><th>Proceso auditado</th><th>Auditor</th><th>No conformidades</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+          ${(auditorias || []).map(a => `
+            <tr>
+              <td>${a.fecha}</td>
+              <td>${a.proceso_auditado}</td>
+              <td>${a.auditor || '—'}</td>
+              <td class="mono" style="${a.no_conformidades_encontradas > 0 ? 'color:var(--rojo);font-weight:700;' : ''}">${a.no_conformidades_encontradas ?? 0}</td>
+              <td>
+                <select class="select-estado pill ${a.estado === 'cerrada' ? 'cumplida' : a.estado === 'en_curso' ? 'en_curso' : 'pendiente'}" data-id="${a.id}">
+                  <option value="planeada" ${a.estado==='planeada'?'selected':''}>Planeada</option>
+                  <option value="en_curso" ${a.estado==='en_curso'?'selected':''}>En curso</option>
+                  <option value="cerrada" ${a.estado==='cerrada'?'selected':''}>Cerrada</option>
+                </select>
+              </td>
+              <td><button type="button" class="btn-editar-fila btn-editar-auditoria" data-id="${a.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin auditorías registradas todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bloque-titulo">Acciones correctivas</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-accion-correctiva">+ Nueva acción correctiva</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Fecha</th><th>Origen</th><th>Descripción</th><th>Eficaz</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+          ${(acciones || []).map(a => `
+            <tr>
+              <td>${a.fecha}</td>
+              <td>${ETIQUETAS_ORIGEN_AC[a.origen] || a.origen}</td>
+              <td>${a.descripcion}</td>
+              <td>${a.eficaz === true ? '✓' : a.eficaz === false ? '✗' : '—'}</td>
+              <td>
+                <select class="select-estado pill ${a.estado === 'cerrada' ? 'cumplida' : a.estado === 'en_proceso' ? 'en_curso' : 'pendiente'}" data-id="${a.id}">
+                  <option value="abierta" ${a.estado==='abierta'?'selected':''}>Abierta</option>
+                  <option value="en_proceso" ${a.estado==='en_proceso'?'selected':''}>En proceso</option>
+                  <option value="cerrada" ${a.estado==='cerrada'?'selected':''}>Cerrada</option>
+                </select>
+              </td>
+              <td><button type="button" class="btn-editar-fila btn-editar-accion-correctiva" data-id="${a.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin acciones correctivas registradas. ✓</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById('btn-nueva-auditoria').addEventListener('click', () => abrirFormAuditoria(procesoId));
+  bloque.querySelectorAll('.btn-editar-auditoria').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormAuditoria(procesoId, (auditorias || []).find(a => a.id === btn.dataset.id)));
+  });
+  document.getElementById('btn-nueva-accion-correctiva').addEventListener('click', () => abrirFormAccionCorrectiva(procesoId));
+  bloque.querySelectorAll('.btn-editar-accion-correctiva').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormAccionCorrectiva(procesoId, (acciones || []).find(a => a.id === btn.dataset.id)));
+  });
+  bloque.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const esAuditoria = sel.closest('table').querySelector('thead').textContent.includes('auditado');
+      const tabla = esAuditoria ? 'auditorias_internas' : 'acciones_correctivas';
+      await supabase.from(tabla).update({ estado: sel.value, actualizado_en: new Date().toISOString() }).eq('id', sel.dataset.id);
+      cargarModulosCalidad(procesoId);
+    });
+  });
+}
+
+function abrirFormAuditoria(procesoId, auditoriaExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = auditoriaExistente ? 'Editar auditoría' : 'Nueva auditoría interna';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Proceso auditado</label><input type="text" id="f-proceso-aud" required value="${auditoriaExistente ? (auditoriaExistente.proceso_auditado||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: PM-02 Producción" /></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-aud" value="${auditoriaExistente && auditoriaExistente.fecha ? auditoriaExistente.fecha : new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label>Auditor</label><input type="text" id="f-auditor-aud" value="${auditoriaExistente ? (auditoriaExistente.auditor||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Hallazgos</label><textarea id="f-hallazgos-aud">${auditoriaExistente ? (auditoriaExistente.hallazgos || '') : ''}</textarea></div>
+    <div class="campo"><label>Conformidades observadas</label><textarea id="f-conformidades-aud">${auditoriaExistente ? (auditoriaExistente.conformidades || '') : ''}</textarea></div>
+    <div class="campo"><label>No conformidades encontradas</label><input type="number" min="0" id="f-num-nc-aud" value="${auditoriaExistente && auditoriaExistente.no_conformidades_encontradas != null ? auditoriaExistente.no_conformidades_encontradas : 0}" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      proceso_auditado: document.getElementById('f-proceso-aud').value,
+      fecha: document.getElementById('f-fecha-aud').value,
+      auditor: document.getElementById('f-auditor-aud').value,
+      hallazgos: document.getElementById('f-hallazgos-aud').value,
+      conformidades: document.getElementById('f-conformidades-aud').value,
+      no_conformidades_encontradas: document.getElementById('f-num-nc-aud').value || 0,
+      actualizado_en: new Date().toISOString()
+    };
+    if (auditoriaExistente) {
+      await supabase.from('auditorias_internas').update(datos).eq('id', auditoriaExistente.id);
+    } else {
+      await supabase.from('auditorias_internas').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosCalidad(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+function abrirFormAccionCorrectiva(procesoId, accionExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = accionExistente ? 'Editar acción correctiva' : 'Nueva acción correctiva';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Origen</label><select id="f-origen-ac">
+      ${Object.entries(ETIQUETAS_ORIGEN_AC).map(([v,l]) => `<option value="${v}" ${accionExistente && accionExistente.origen===v ? 'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Descripción de la no conformidad</label><textarea id="f-descripcion-ac" required>${accionExistente ? (accionExistente.descripcion || '') : ''}</textarea></div>
+    <div class="campo"><label>Causa raíz</label><textarea id="f-causa-ac" placeholder="Los 5 porqués — la causa de fondo, no solo el síntoma">${accionExistente ? (accionExistente.causa_raiz || '') : ''}</textarea></div>
+    <div class="campo"><label>Acción correctiva</label><textarea id="f-accion-ac">${accionExistente ? (accionExistente.accion_correctiva || '') : ''}</textarea></div>
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable-ac" value="${accionExistente ? (accionExistente.responsable||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Fecha de verificación</label><input type="date" id="f-fecha-verif-ac" value="${accionExistente && accionExistente.fecha_verificacion ? accionExistente.fecha_verificacion : ''}" /></div>
+    <div class="campo"><label>¿Fue eficaz?</label><select id="f-eficaz-ac">
+      <option value="">Sin verificar todavía</option>
+      <option value="true" ${accionExistente && accionExistente.eficaz === true ? 'selected':''}>Sí</option>
+      <option value="false" ${accionExistente && accionExistente.eficaz === false ? 'selected':''}>No</option>
+    </select></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const eficazVal = document.getElementById('f-eficaz-ac').value;
+    const datos = {
+      proceso_id: procesoId,
+      origen: document.getElementById('f-origen-ac').value,
+      descripcion: document.getElementById('f-descripcion-ac').value,
+      causa_raiz: document.getElementById('f-causa-ac').value,
+      accion_correctiva: document.getElementById('f-accion-ac').value,
+      responsable: document.getElementById('f-responsable-ac').value,
+      fecha_verificacion: document.getElementById('f-fecha-verif-ac').value || null,
+      eficaz: eficazVal === '' ? null : eficazVal === 'true',
+      actualizado_en: new Date().toISOString()
+    };
+    if (accionExistente) {
+      await supabase.from('acciones_correctivas').update(datos).eq('id', accionExistente.id);
+    } else {
+      await supabase.from('acciones_correctivas').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosCalidad(procesoId);
   };
   document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
