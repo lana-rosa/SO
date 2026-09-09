@@ -158,6 +158,21 @@
   .grid-foda{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
   @media (max-width:640px){.grid-foda{grid-template-columns:1fr;}}
   .cuadrante-foda h4{margin:0 0 8px;font-size:12.5px;text-transform:uppercase;letter-spacing:.03em;}
+
+  .diagrama-flujo{display:flex;flex-direction:column;align-items:center;gap:0;padding:10px 0;}
+  .paso-flujo-envoltura{display:flex;flex-direction:column;align-items:center;}
+  .paso-flujo{position:relative;min-width:180px;max-width:320px;padding:12px 18px;font-size:13px;text-align:center;background:#fff;border:2px solid var(--rosa-fuerte);color:var(--tinta);display:flex;align-items:center;justify-content:center;}
+  .paso-flujo.inicio, .paso-flujo.fin{border-radius:40px;background:var(--rosa-fuerte);color:#fff;font-weight:700;}
+  .paso-flujo.actividad{border-radius:8px;}
+  .paso-flujo.documento{border-radius:2px;border-color:var(--azul-acero);position:relative;}
+  .paso-flujo.documento::after{content:'📄';position:absolute;top:-10px;right:-6px;font-size:14px;}
+  .paso-flujo.decision{width:200px;height:140px;min-width:0;border-color:var(--ambar);transform:rotate(45deg);display:flex;align-items:center;justify-content:center;margin:20px 0;}
+  .paso-flujo.decision .texto-decision{transform:rotate(-45deg);width:120px;text-align:center;font-size:12px;}
+  .flecha-flujo{width:2px;height:26px;background:var(--tinta-suave);position:relative;}
+  .flecha-flujo::after{content:'';position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid var(--tinta-suave);}
+  .controles-paso{display:flex;gap:4px;margin-top:6px;}
+  .controles-paso button{border:none;background:var(--blanco-hueso);color:var(--tinta-suave);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;}
+  .controles-paso button:hover{background:var(--rosa-suave);color:var(--rosa-fuerte);}
   .cuadrante-foda.fortaleza h4{color:var(--verde);}
   .cuadrante-foda.debilidad h4{color:var(--rojo);}
   .cuadrante-foda.oportunidad h4{color:#4c7594;}
@@ -863,6 +878,100 @@ async function abrirDetalleLinea(id) {
   });
 }
 
+/* ---------------- DIAGRAMA DE FLUJO (todos los procesos) ---------------- */
+const ETIQUETAS_TIPO_PASO = { inicio: 'Inicio', actividad: 'Actividad', decision: 'Decisión', documento: 'Documento', fin: 'Fin' };
+
+async function cargarDiagramaFlujo(procesoId) {
+  const bloque = document.getElementById('bloque-diagrama-flujo');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando diagrama…</div></div>';
+  const { data: pasos } = await supabase.from('pasos_flujo').select('*').eq('proceso_id', procesoId).order('orden');
+  renderDiagramaFlujo(procesoId, pasos || []);
+}
+
+function renderDiagramaFlujo(procesoId, pasos) {
+  const bloque = document.getElementById('bloque-diagrama-flujo');
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Diagrama de flujo</div>
+    <div class="panel-erp">
+      ${pasos.length ? `<div class="diagrama-flujo">
+        ${pasos.map((paso, i) => `
+          <div class="paso-flujo-envoltura">
+            ${i > 0 ? '<div class="flecha-flujo"></div>' : ''}
+            <div class="paso-flujo ${paso.tipo}">
+              ${paso.tipo === 'decision' ? `<span class="texto-decision">${paso.texto}</span>` : paso.texto}
+            </div>
+            <div class="controles-paso">
+              ${i > 0 ? `<button type="button" class="btn-subir-paso" data-id="${paso.id}">↑</button>` : ''}
+              ${i < pasos.length - 1 ? `<button type="button" class="btn-bajar-paso" data-id="${paso.id}">↓</button>` : ''}
+              <button type="button" class="btn-editar-paso" data-id="${paso.id}">✎</button>
+              <button type="button" class="btn-quitar-paso" data-id="${paso.id}">×</button>
+            </div>
+          </div>`).join('')}
+      </div>` : '<div class="sin-relacionados" style="text-align:center;padding:14px;">Este proceso todavía no tiene diagrama de flujo.</div>'}
+      <div style="text-align:center;margin-top:14px;">
+        <button type="button" class="btn-secundario" id="btn-agregar-paso">+ Agregar paso</button>
+      </div>
+    </div>`;
+
+  bloque.querySelector('#btn-agregar-paso').addEventListener('click', () => abrirFormPaso(procesoId, null, pasos));
+  bloque.querySelectorAll('.btn-editar-paso').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormPaso(procesoId, pasos.find(p => p.id === btn.dataset.id), pasos));
+  });
+  bloque.querySelectorAll('.btn-quitar-paso').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await supabase.from('pasos_flujo').delete().eq('id', btn.dataset.id);
+      cargarDiagramaFlujo(procesoId);
+    });
+  });
+  bloque.querySelectorAll('.btn-subir-paso').forEach(btn => {
+    btn.addEventListener('click', () => moverPaso(procesoId, pasos, btn.dataset.id, -1));
+  });
+  bloque.querySelectorAll('.btn-bajar-paso').forEach(btn => {
+    btn.addEventListener('click', () => moverPaso(procesoId, pasos, btn.dataset.id, 1));
+  });
+}
+
+async function moverPaso(procesoId, pasos, id, direccion) {
+  const idx = pasos.findIndex(p => p.id === id);
+  const idxVecino = idx + direccion;
+  if (idxVecino < 0 || idxVecino >= pasos.length) return;
+  const a = pasos[idx], b = pasos[idxVecino];
+  await Promise.all([
+    supabase.from('pasos_flujo').update({ orden: b.orden }).eq('id', a.id),
+    supabase.from('pasos_flujo').update({ orden: a.orden }).eq('id', b.id),
+  ]);
+  cargarDiagramaFlujo(procesoId);
+}
+
+function abrirFormPaso(procesoId, pasoExistente, pasosActuales) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = pasoExistente ? 'Editar paso' : 'Agregar paso al diagrama';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Tipo</label><select id="f-tipo-paso">
+      ${Object.entries(ETIQUETAS_TIPO_PASO).map(([v,l]) => `<option value="${v}" ${pasoExistente && pasoExistente.tipo===v ? 'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Texto</label><textarea id="f-texto-paso" required placeholder="Ej: Recibir pedido, ¿El pedido está completo?, Enviar cotización...">${pasoExistente ? pasoExistente.texto : ''}</textarea></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      tipo: document.getElementById('f-tipo-paso').value,
+      texto: document.getElementById('f-texto-paso').value,
+    };
+    if (pasoExistente) {
+      await supabase.from('pasos_flujo').update(datos).eq('id', pasoExistente.id);
+    } else {
+      const maxOrden = pasosActuales.length ? Math.max(...pasosActuales.map(p => p.orden)) : -1;
+      datos.orden = maxOrden + 1;
+      await supabase.from('pasos_flujo').insert(datos);
+    }
+    cerrarForm();
+    cargarDiagramaFlujo(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
 function abrirDetalleProceso(id) {
   const p = cacheProcesos.find(x => x.id === id);
   if (!p) return;
@@ -880,11 +989,13 @@ function abrirDetalleProceso(id) {
         <div><div class="etq">Estado</div><div class="val">${p.estado === 'reservado' ? 'Reservado — se activa cuando la empresa crezca' : 'Activo'}</div></div>
       </div>
     </div>
+    <div id="bloque-diagrama-flujo"></div>
     <div id="bloque-estrategico"></div>
     <div class="bloque-titulo">Información relacionada</div>
     <div class="grid-erp" id="grid-relacionados"></div>`;
 
   renderSeccionesRelacionadas(p);
+  cargarDiagramaFlujo(p.id);
   if (p.codigo === 'PE-01') cargarModulosEstrategicos(p.id);
   if (p.codigo === 'PE-02') cargarModulosFinanciacion(p.id);
   if (p.codigo === 'PE-03') cargarModulosAlianzas(p.id);
