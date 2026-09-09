@@ -365,6 +365,7 @@
         <div class="panel-erp"><h3>Alertas activas</h3><div id="erp-alertas" class="vacio-mini">Cargando…</div></div>
         <div class="panel-erp"><h3>Fondo Emprender</h3><div id="erp-fondo" class="vacio-mini">Cargando…</div></div>
         <div class="panel-erp"><h3>Inventario crítico</h3><div id="erp-inventario" class="vacio-mini">Cargando…</div></div>
+        <div class="panel-erp"><h3>CRM — Pedidos</h3><div id="erp-crm" class="vacio-mini">Cargando…</div></div>
       </div>
 
       <div id="grid-kpi" class="grid-kpi"></div>
@@ -665,12 +666,24 @@ function pintarInventario(items_stock_bajo, total_alertas) {
     ).join('') + '</ul>';
 }
 
+const ETIQUETAS_ESTADO_PEDIDO_CRM = { 'en produccion': 'En producción', 'en proceso': 'En proceso', 'listo': 'Listo', 'entregado': 'Entregado', 'sin_estado': 'Sin estado' };
+function pintarCrm(datosCrm) {
+  const cont = document.getElementById('erp-crm');
+  if (!datosCrm || !datosCrm.pedidos_por_estado) { cont.innerHTML = '<div class="vacio-mini">Sin datos del CRM todavía.</div>'; return; }
+  const filas = Object.entries(datosCrm.pedidos_por_estado)
+    .map(([estado, info]) => `<div class="fila-metrica"><span class="etq">${ETIQUETAS_ESTADO_PEDIDO_CRM[estado] || estado}</span><span class="val">${info.cantidad} · ${formatoCOP(info.valor)}</span></div>`)
+    .join('');
+  cont.innerHTML = filas +
+    `<div class="fila-metrica" style="border-top:1px solid var(--borde);margin-top:6px;padding-top:8px;"><span class="etq">Total clientes</span><span class="val">${datosCrm.total_clientes ?? '—'}</span></div>`;
+}
+
 function pintarTodoDesdeResumen(r) {
   pintarFlujo(r.resumen_financiero ? r.resumen_financiero.flujo_caja_30_dias : null);
   pintarVentas(r.resumen_financiero ? r.resumen_financiero.ventas : null);
   pintarAlertas(r.alertas_activas ? r.alertas_activas.alertas : null);
   pintarFondo(r.fondo_emprender ? r.fondo_emprender.saldo : null, r.fondo_emprender ? r.fondo_emprender.proximos_hitos : null);
   pintarInventario(r.inventario_critico ? r.inventario_critico.items_stock_bajo : null, r.inventario_critico ? r.inventario_critico.total_alertas : null);
+  pintarCrm(r.resumen_crm || null);
 }
 
 function marcarEstadoResumen(texto) {
@@ -704,13 +717,15 @@ async function actualizarResumenEnVivo() {
     erpFetch('/api/pos/so/alertas-activas'),
     erpFetch('/api/pos/so/fondo-emprender'),
     erpFetch('/api/pos/so/inventario-critico'),
+    erpFetch('/api/pos/so/resumen-crm'),
   ]);
-  const [resumenFin, alertas, fondo, inventario] = resultados.map(r => r.status === 'fulfilled' ? r.value : null);
+  const [resumenFin, alertas, fondo, inventario, crm] = resultados.map(r => r.status === 'fulfilled' ? r.value : null);
   pintarFlujo(resumenFin ? resumenFin.flujo_caja_30_dias : null);
   pintarVentas(resumenFin ? resumenFin.ventas : null);
   pintarAlertas(alertas ? alertas.alertas : null);
   pintarFondo(fondo ? fondo.saldo : null, fondo ? fondo.proximos_hitos : null);
   pintarInventario(inventario ? inventario.items_stock_bajo : null, inventario ? inventario.total_alertas : null);
+  pintarCrm(crm);
   marcarEstadoResumen('Actualizado ' + new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) + ' (en vivo)');
 }
 
