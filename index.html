@@ -701,12 +701,15 @@ function pintarMapaProcesos(procesos) {
 function pintarTablaProcesos(procesos) {
   const tbody = document.getElementById('tabla-procesos');
   tbody.innerHTML = procesos.map(p => `
-    <tr>
+    <tr data-id="${p.id}" style="cursor:pointer;">
       <td class="mono">${p.codigo}</td>
       <td>${p.nombre}</td>
       <td>${p.responsable || '—'}</td>
       <td><span class="pill ${p.estado === 'activo' ? 'cumplida' : 'pendiente'}">${p.estado}</span></td>
     </tr>`).join('');
+  tbody.querySelectorAll('tr').forEach(fila => {
+    fila.addEventListener('click', () => abrirDetalleProceso(fila.dataset.id));
+  });
 }
 
 function abrirDetalleProceso(id) {
@@ -792,14 +795,16 @@ async function cargarModulosEstrategicos(procesoId) {
   const bloque = document.getElementById('bloque-estrategico');
   bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando módulos estratégicos…</div></div>';
 
-  const [{ data: identidad }, { data: foda }, { data: partes }, { data: revisiones }] = await Promise.all([
+  const [{ data: identidad }, { data: foda }, { data: partes }, { data: revisiones }, { data: canvas }] = await Promise.all([
     supabase.from('identidad_estrategica').select('*').eq('proceso_id', procesoId).maybeSingle(),
     supabase.from('analisis_foda').select('*').eq('proceso_id', procesoId).order('creado_en'),
     supabase.from('partes_interesadas').select('*').eq('proceso_id', procesoId).order('creado_en'),
     supabase.from('revisiones_estrategicas').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+    supabase.from('modelo_canvas').select('*').eq('proceso_id', procesoId).maybeSingle(),
   ]);
 
   const ie = identidad || {};
+  const mc = canvas || {};
   const tiposFoda = [
     { clave: 'fortaleza', etiqueta: 'Fortalezas' },
     { clave: 'debilidad', etiqueta: 'Debilidades' },
@@ -811,6 +816,8 @@ async function cargarModulosEstrategicos(procesoId) {
   bloque.innerHTML = `
     <div class="bloque-titulo">Identidad estratégica</div>
     <div class="panel-erp">
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Historia</label>
+      <textarea id="ie-historia" placeholder="Cómo y cuándo nació Lana Rosa, cómo ha evolucionado">${ie.historia || ''}</textarea>
       <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Misión</label>
       <textarea id="ie-mision" placeholder="¿Por qué existe Lana Rosa hoy?">${ie.mision || ''}</textarea>
       <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Visión</label>
@@ -820,6 +827,23 @@ async function cargarModulosEstrategicos(procesoId) {
       <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Propósito</label>
       <textarea id="ie-proposito" placeholder="El impacto que quieres dejar más allá de vender">${ie.proposito || ''}</textarea>
       <button type="button" class="btn-secundario" id="btn-guardar-identidad">Guardar identidad estratégica</button>
+    </div>
+
+    <div class="bloque-titulo">Modelo de Negocio Canvas</div>
+    <div class="panel-erp">
+      <p style="font-size:12.5px;color:var(--tinta-suave);margin-top:0;">Los 9 bloques del lienzo de Osterwalder — una foto completa de cómo funciona el negocio.</p>
+      <div class="grid-foda">
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Segmentos de clientes</label><textarea id="mc-segmentos">${mc.segmentos_clientes || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Propuesta de valor</label><textarea id="mc-propuesta">${mc.propuesta_valor || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Canales</label><textarea id="mc-canales">${mc.canales || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Relación con clientes</label><textarea id="mc-relacion">${mc.relacion_clientes || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Fuentes de ingresos</label><textarea id="mc-ingresos">${mc.fuentes_ingresos || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Recursos clave</label><textarea id="mc-recursos">${mc.recursos_clave || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Actividades clave</label><textarea id="mc-actividades">${mc.actividades_clave || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Socios clave</label><textarea id="mc-socios">${mc.socios_clave || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Estructura de costos</label><textarea id="mc-costos">${mc.estructura_costos || ''}</textarea></div>
+      </div>
+      <button type="button" class="btn-secundario" id="btn-guardar-canvas" style="margin-top:10px;">Guardar Modelo Canvas</button>
     </div>
 
     <div class="bloque-titulo">Análisis FODA</div>
@@ -874,10 +898,28 @@ async function cargarModulosEstrategicos(procesoId) {
   document.getElementById('btn-guardar-identidad').addEventListener('click', async () => {
     await supabase.from('identidad_estrategica').upsert({
       proceso_id: procesoId,
+      historia: document.getElementById('ie-historia').value,
       mision: document.getElementById('ie-mision').value,
       vision: document.getElementById('ie-vision').value,
       valores: document.getElementById('ie-valores').value,
       proposito: document.getElementById('ie-proposito').value,
+      actualizado_en: new Date().toISOString()
+    }, { onConflict: 'proceso_id' });
+    cargarModulosEstrategicos(procesoId);
+  });
+
+  document.getElementById('btn-guardar-canvas').addEventListener('click', async () => {
+    await supabase.from('modelo_canvas').upsert({
+      proceso_id: procesoId,
+      segmentos_clientes: document.getElementById('mc-segmentos').value,
+      propuesta_valor: document.getElementById('mc-propuesta').value,
+      canales: document.getElementById('mc-canales').value,
+      relacion_clientes: document.getElementById('mc-relacion').value,
+      fuentes_ingresos: document.getElementById('mc-ingresos').value,
+      recursos_clave: document.getElementById('mc-recursos').value,
+      actividades_clave: document.getElementById('mc-actividades').value,
+      socios_clave: document.getElementById('mc-socios').value,
+      estructura_costos: document.getElementById('mc-costos').value,
       actualizado_en: new Date().toISOString()
     }, { onConflict: 'proceso_id' });
     cargarModulosEstrategicos(procesoId);
@@ -1451,7 +1493,10 @@ async function cargarModulosProduccion(procesoId) {
   const bloque = document.getElementById('bloque-estrategico');
   bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
 
-  const { data: noConformidades } = await supabase.from('no_conformidades').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false });
+  const [{ data: noConformidades }, { data: auditorias5s }] = await Promise.all([
+    supabase.from('no_conformidades').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+    supabase.from('auditorias_5s').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+  ]);
 
   bloque.innerHTML = `
     <div class="bloque-titulo">No conformidades / Control de calidad</div>
@@ -1476,6 +1521,32 @@ async function cargarModulosProduccion(procesoId) {
             </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin no conformidades registradas. ✓</td></tr>'}
         </tbody>
       </table>
+    </div>
+
+    <div class="bloque-titulo">Auditorías 5S (Seiri · Seiton · Seiso · Seiketsu · Shitsuke)</div>
+    <div class="panel-erp">
+      <p style="font-size:12.5px;color:var(--tinta-suave);margin-top:0;">Calificación del taller del 1 al 5 en cada una de las 5 eses japonesas — clasificar, ordenar, limpiar, estandarizar, disciplina.</p>
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-5s">+ Nueva auditoría 5S</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Fecha</th><th>Área</th><th>Seiri</th><th>Seiton</th><th>Seiso</th><th>Seiketsu</th><th>Shitsuke</th><th>Total</th><th></th></tr></thead>
+        <tbody>
+          ${(auditorias5s || []).map(a => {
+            const total = a.seiri_clasificar + a.seiton_ordenar + a.seiso_limpiar + a.seiketsu_estandarizar + a.shitsuke_disciplina;
+            return `
+            <tr>
+              <td>${a.fecha}</td>
+              <td>${a.area}</td>
+              <td class="mono">${a.seiri_clasificar}</td>
+              <td class="mono">${a.seiton_ordenar}</td>
+              <td class="mono">${a.seiso_limpiar}</td>
+              <td class="mono">${a.seiketsu_estandarizar}</td>
+              <td class="mono">${a.shitsuke_disciplina}</td>
+              <td class="mono" style="font-weight:700;${total >= 20 ? 'color:var(--verde);' : total >= 13 ? 'color:var(--ambar);' : 'color:var(--rojo);'}">${total}/25</td>
+              <td><button type="button" class="btn-editar-fila btn-editar-5s" data-id="${a.id}" title="Editar">✎</button></td>
+            </tr>`;
+          }).join('') || '<tr><td colspan="9" style="color:#6b6270;">Sin auditorías 5S registradas todavía.</td></tr>'}
+        </tbody>
+      </table>
     </div>`;
 
   bloque.querySelectorAll('.select-estado').forEach(sel => {
@@ -1492,6 +1563,54 @@ async function cargarModulosProduccion(procesoId) {
   bloque.querySelectorAll('.btn-editar-nc').forEach(btn => {
     btn.addEventListener('click', () => abrirFormNoConformidad(procesoId, (noConformidades || []).find(n => n.id === btn.dataset.id)));
   });
+  document.getElementById('btn-nueva-5s').addEventListener('click', () => abrirFormAuditoria5s(procesoId));
+  bloque.querySelectorAll('.btn-editar-5s').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormAuditoria5s(procesoId, (auditorias5s || []).find(a => a.id === btn.dataset.id)));
+  });
+}
+
+function abrirFormAuditoria5s(procesoId, auditoriaExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = auditoriaExistente ? 'Editar auditoría 5S' : 'Nueva auditoría 5S';
+  const campoS = (id, etiqueta, valorActual) => `
+    <div class="campo"><label>${etiqueta} (1-5)</label><input type="number" min="1" max="5" id="${id}" required value="${valorActual ?? ''}" /></div>`;
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Área</label><input type="text" id="f-area-5s" required value="${auditoriaExistente ? (auditoriaExistente.area||'').replace(/"/g,'&quot;') : 'Taller'}" /></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-5s" value="${auditoriaExistente && auditoriaExistente.fecha ? auditoriaExistente.fecha : new Date().toISOString().slice(0,10)}" /></div>
+    ${campoS('f-seiri', 'Seiri — Clasificar', auditoriaExistente?.seiri_clasificar)}
+    ${campoS('f-seiton', 'Seiton — Ordenar', auditoriaExistente?.seiton_ordenar)}
+    ${campoS('f-seiso', 'Seiso — Limpiar', auditoriaExistente?.seiso_limpiar)}
+    ${campoS('f-seiketsu', 'Seiketsu — Estandarizar', auditoriaExistente?.seiketsu_estandarizar)}
+    ${campoS('f-shitsuke', 'Shitsuke — Disciplina', auditoriaExistente?.shitsuke_disciplina)}
+    <div class="campo"><label>Observaciones</label><textarea id="f-observaciones-5s">${auditoriaExistente ? (auditoriaExistente.observaciones || '') : ''}</textarea></div>
+    <div class="campo"><label>Plan de acción</label><textarea id="f-plan-5s" placeholder="Qué se va a mejorar antes de la próxima auditoría">${auditoriaExistente ? (auditoriaExistente.plan_accion || '') : ''}</textarea></div>
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable-5s" value="${auditoriaExistente ? (auditoriaExistente.responsable||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      area: document.getElementById('f-area-5s').value,
+      fecha: document.getElementById('f-fecha-5s').value,
+      seiri_clasificar: document.getElementById('f-seiri').value,
+      seiton_ordenar: document.getElementById('f-seiton').value,
+      seiso_limpiar: document.getElementById('f-seiso').value,
+      seiketsu_estandarizar: document.getElementById('f-seiketsu').value,
+      shitsuke_disciplina: document.getElementById('f-shitsuke').value,
+      observaciones: document.getElementById('f-observaciones-5s').value,
+      plan_accion: document.getElementById('f-plan-5s').value,
+      responsable: document.getElementById('f-responsable-5s').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (auditoriaExistente) {
+      await supabase.from('auditorias_5s').update(datos).eq('id', auditoriaExistente.id);
+    } else {
+      await supabase.from('auditorias_5s').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosProduccion(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
 
 function abrirFormNoConformidad(procesoId, ncExistente) {
