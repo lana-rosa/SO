@@ -4,6 +4,14 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Sistema Operativo · Lana Rosa</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#d8017c">
+<link rel="icon" href="./favicon-32.png" sizes="32x32">
+<link rel="icon" href="./icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LR OS">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -478,6 +486,12 @@ const ERP_API_URL = 'https://lana-rosa-os-pos.saralmunoz1301.workers.dev';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   db: { schema: 'sistema_operativo' }
 });
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('No se pudo registrar el service worker:', err));
+  });
+}
 
 const NOMBRES_CATEGORIA = {
   estrategico: 'Estratégicos',
