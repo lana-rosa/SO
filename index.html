@@ -294,6 +294,7 @@
       <button data-vista="riesgos"><span class="ico">!</span> Riesgos</button>
       <button data-vista="tareas"><span class="ico">✓</span> Tareas</button>
       <button data-vista="indicadores"><span class="ico">%</span> Indicadores</button>
+      <button data-vista="lineas"><span class="ico">◆</span> Líneas Estratégicas</button>
       <button data-vista="documentos"><span class="ico">▭</span> Documentos</button>
       <button data-vista="evidencias"><span class="ico">📎</span> Evidencias</button>
     </nav>
@@ -424,6 +425,18 @@
       </table>
     </section>
 
+    <!-- ---- LÍNEAS ESTRATÉGICAS ---- -->
+    <section class="vista" data-vista="lineas">
+      <div class="encabezado-vista"><h2>Líneas Estratégicas</h2><p>Cada línea es una unidad de negocio con su propio Canvas, FODA y procesos — alineada a la estrategia corporativa transversal.</p></div>
+      <div id="grid-lineas" class="grid-erp"></div>
+    </section>
+
+    <!-- ---- DETALLE DE LÍNEA ESTRATÉGICA (pantalla completa) ---- -->
+    <section class="vista" data-vista="detalle-linea">
+      <button type="button" class="btn-volver" id="btn-volver-linea">← Volver a Líneas Estratégicas</button>
+      <div id="contenido-detalle-linea"></div>
+    </section>
+
     <!-- ---- DETALLE DE PROCESO (pantalla completa) ---- -->
     <section class="vista" data-vista="detalle-proceso">
       <button type="button" class="btn-volver" id="btn-volver-proceso">← Volver al mapa de procesos</button>
@@ -466,6 +479,7 @@ let cacheDocumentos = [];
 let cacheEvidencias = [];
 let cacheRiesgos = [];
 let cacheIndicadores = [];
+let cacheLineas = [];
 
 /* ---------------- LOGIN ---------------- */
 const pantallaLogin = document.getElementById('pantalla-login');
@@ -523,6 +537,7 @@ document.querySelectorAll('nav.menu button').forEach(btn => {
   btn.addEventListener('click', () => mostrarVista(btn.dataset.vista));
 });
 document.getElementById('btn-volver-proceso').addEventListener('click', () => mostrarVista('dashboard'));
+document.getElementById('btn-volver-linea').addEventListener('click', () => mostrarVista('lineas'));
 
 /* ---------------- CARGA DE DATOS ---------------- */
 async function cargarTodo() {
@@ -534,8 +549,10 @@ async function cargarTodo() {
     cargarIndicadores(),
     cargarDocumentos(),
     cargarEvidencias(),
+    cargarLineas(),
     cargarResumenErp()
   ]);
+  pintarGridLineas();
 }
 
 /* ---------------- RESUMEN DEL NEGOCIO (caché del SO + datos en vivo del ERP) ---------------- */
@@ -709,6 +726,140 @@ function pintarTablaProcesos(procesos) {
     </tr>`).join('');
   tbody.querySelectorAll('tr').forEach(fila => {
     fila.addEventListener('click', () => abrirDetalleProceso(fila.dataset.id));
+  });
+}
+
+/* ---------------- LÍNEAS ESTRATÉGICAS (UEN) ---------------- */
+async function cargarLineas() {
+  const { data, error } = await supabase.from('lineas_estrategicas').select('*').order('orden');
+  if (error) { console.error(error); return; }
+  cacheLineas = data || [];
+  pintarGridLineas();
+}
+
+function pintarGridLineas() {
+  const grid = document.getElementById('grid-lineas');
+  if (!grid) return;
+  grid.innerHTML = cacheLineas.map(l => {
+    const numProcesos = cacheProcesos.filter(p => p.linea_estrategica_id === l.id).length;
+    return `
+    <div class="panel-erp" data-id="${l.id}" style="cursor:pointer;${l.estado === 'futura' ? 'border-style:dashed;' : ''}">
+      <h3>${l.nombre} ${l.estado === 'futura' ? '<span class="badge-reservado">Futura</span>' : ''}</h3>
+      <p style="font-size:12.5px;color:var(--tinta-suave);margin:0 0 8px;">${l.descripcion || ''}</p>
+      <div class="fila-metrica"><span class="etq">Procesos</span><span class="val">${numProcesos}</span></div>
+    </div>`;
+  }).join('');
+  grid.querySelectorAll('[data-id]').forEach(card => {
+    card.addEventListener('click', () => abrirDetalleLinea(card.dataset.id));
+  });
+}
+
+async function abrirDetalleLinea(id) {
+  const linea = cacheLineas.find(x => x.id === id);
+  if (!linea) return;
+  mostrarVista('detalle-linea');
+
+  const cont = document.getElementById('contenido-detalle-linea');
+  cont.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const [{ data: canvas }, { data: foda }] = await Promise.all([
+    supabase.from('modelo_canvas').select('*').eq('linea_estrategica_id', id).maybeSingle(),
+    supabase.from('analisis_foda').select('*').eq('linea_estrategica_id', id).order('creado_en'),
+  ]);
+  const mc = canvas || {};
+  const tiposFoda = [
+    { clave: 'fortaleza', etiqueta: 'Fortalezas' },
+    { clave: 'debilidad', etiqueta: 'Debilidades' },
+    { clave: 'oportunidad', etiqueta: 'Oportunidades' },
+    { clave: 'amenaza', etiqueta: 'Amenazas' },
+  ];
+  const procesosLinea = cacheProcesos.filter(p => p.linea_estrategica_id === id);
+
+  cont.innerHTML = `
+    <div class="cabecera-proceso">
+      <div class="cod">${linea.codigo}</div>
+      <h2>${linea.nombre}</h2>
+      <div class="fila-meta">
+        <div><div class="etq">Descripción</div><div class="val">${linea.descripcion || '—'}</div></div>
+        <div><div class="etq">Estado</div><div class="val">${linea.estado === 'futura' ? 'Futura — sin procesos todavía' : 'Activa'}</div></div>
+      </div>
+    </div>
+
+    <div class="bloque-titulo">Modelo de Negocio Canvas</div>
+    <div class="panel-erp">
+      <div class="grid-foda">
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Segmentos de clientes</label><textarea id="mcl-segmentos">${mc.segmentos_clientes || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Propuesta de valor</label><textarea id="mcl-propuesta">${mc.propuesta_valor || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Canales</label><textarea id="mcl-canales">${mc.canales || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Relación con clientes</label><textarea id="mcl-relacion">${mc.relacion_clientes || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Fuentes de ingresos</label><textarea id="mcl-ingresos">${mc.fuentes_ingresos || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Recursos clave</label><textarea id="mcl-recursos">${mc.recursos_clave || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Actividades clave</label><textarea id="mcl-actividades">${mc.actividades_clave || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Socios clave</label><textarea id="mcl-socios">${mc.socios_clave || ''}</textarea></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Estructura de costos</label><textarea id="mcl-costos">${mc.estructura_costos || ''}</textarea></div>
+      </div>
+      <button type="button" class="btn-secundario" id="btn-guardar-canvas-linea" style="margin-top:10px;">Guardar Modelo Canvas</button>
+    </div>
+
+    <div class="bloque-titulo">Análisis FODA de la línea</div>
+    <div class="panel-erp">
+      <div class="grid-foda">
+        ${tiposFoda.map(t => `
+          <div class="cuadrante-foda ${t.clave}">
+            <h4>${t.etiqueta}</h4>
+            <div class="lista-foda" data-tipo="${t.clave}">
+              ${(foda || []).filter(f => f.tipo === t.clave).map(f => `<div class="item-foda" data-id="${f.id}"><span>${f.descripcion}</span><button type="button" class="quitar-foda-linea" data-id="${f.id}">×</button></div>`).join('') || `<div class="sin-relacionados">Sin ${t.etiqueta.toLowerCase()} todavía.</div>`}
+            </div>
+            <div class="form-mini-inline">
+              <input type="text" placeholder="Agregar..." data-tipo-input-linea="${t.clave}" />
+              <button type="button" class="btn-agregar-foda-linea" data-tipo="${t.clave}">+</button>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="bloque-titulo">Procesos de esta línea</div>
+    <div class="panel-erp">
+      ${procesosLinea.length ? `
+        <div class="lista-relacionada">
+          ${procesosLinea.map(p => `<div class="item-relacionado" data-id="${p.id}"><span class="txt"><span class="mono">${p.codigo}</span>${p.nombre}</span></div>`).join('')}
+        </div>` : '<div class="sin-relacionados">Esta línea todavía no tiene procesos propios.</div>'}
+    </div>`;
+
+  document.getElementById('btn-guardar-canvas-linea').addEventListener('click', async () => {
+    await supabase.from('modelo_canvas').upsert({
+      linea_estrategica_id: id,
+      segmentos_clientes: document.getElementById('mcl-segmentos').value,
+      propuesta_valor: document.getElementById('mcl-propuesta').value,
+      canales: document.getElementById('mcl-canales').value,
+      relacion_clientes: document.getElementById('mcl-relacion').value,
+      fuentes_ingresos: document.getElementById('mcl-ingresos').value,
+      recursos_clave: document.getElementById('mcl-recursos').value,
+      actividades_clave: document.getElementById('mcl-actividades').value,
+      socios_clave: document.getElementById('mcl-socios').value,
+      estructura_costos: document.getElementById('mcl-costos').value,
+      actualizado_en: new Date().toISOString()
+    }, { onConflict: 'linea_estrategica_id' });
+    abrirDetalleLinea(id);
+  });
+
+  cont.querySelectorAll('.btn-agregar-foda-linea').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const tipo = btn.dataset.tipo;
+      const input = cont.querySelector(`input[data-tipo-input-linea="${tipo}"]`);
+      if (!input.value.trim()) return;
+      await supabase.from('analisis_foda').insert({ linea_estrategica_id: id, tipo, descripcion: input.value.trim() });
+      abrirDetalleLinea(id);
+    });
+  });
+  cont.querySelectorAll('.quitar-foda-linea').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await supabase.from('analisis_foda').delete().eq('id', btn.dataset.id);
+      abrirDetalleLinea(id);
+    });
+  });
+  cont.querySelectorAll('.item-relacionado[data-id]').forEach(el => {
+    el.addEventListener('click', () => abrirDetalleProceso(el.dataset.id));
   });
 }
 
