@@ -156,6 +156,11 @@
   .cabecera-proceso{background:#fff;border:1px solid var(--borde);border-radius:var(--radio);padding:22px 24px;margin-bottom:26px;}
   .cabecera-proceso .cod{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--rosa-fuerte);font-weight:700;}
   .cabecera-proceso h2{margin:4px 0 12px;font-size:22px;}
+
+  .barra-herramientas-proceso{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:4px 0 14px;margin-bottom:6px;border-bottom:1px solid var(--borde);position:sticky;top:0;background:var(--blanco-hueso);z-index:5;}
+  .btn-tab-proceso{flex-shrink:0;border:1px solid var(--borde);background:#fff;color:var(--tinta-suave);font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:20px;cursor:pointer;white-space:nowrap;transition:background .12s,color .12s;}
+  .btn-tab-proceso:hover{background:var(--rosa-suave);}
+  .btn-tab-proceso.activo{background:var(--rosa-fuerte);color:#fff;border-color:var(--rosa-fuerte);}
   .cabecera-proceso .fila-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;}
   .cabecera-proceso .fila-meta .etq{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--tinta-suave);font-weight:700;margin-bottom:3px;}
   .cabecera-proceso .fila-meta .val{font-size:13.5px;}
@@ -205,7 +210,38 @@
   /* ---------- MAPA DE PROCESOS ---------- */
   .mapa-procesos{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;}
   @media (max-width:1000px){.mapa-procesos{grid-template-columns:repeat(2,1fr);}}
-  @media (max-width:640px){.mapa-procesos{grid-template-columns:1fr;} main{padding:24px 18px;} #app.visible{flex-direction:column;} .sidebar{width:100%;height:auto;position:relative;flex-direction:row;flex-wrap:wrap;align-items:center;} nav.menu{flex-direction:row;flex-wrap:wrap;} .flujo{flex-direction:column;} .flujo .conector{transform:rotate(90deg);}}
+
+  /* ---- Modo app móvil: barra superior + menú tipo cajón deslizable ---- */
+  .barra-app-movil{display:none;}
+  .overlay-sidebar{display:none;}
+  @media (max-width:860px){
+    .barra-app-movil{
+      display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:30;
+      background:#fff;border-bottom:1px solid var(--borde);padding:12px 16px;
+    }
+    .barra-app-movil #btn-abrir-menu{
+      border:none;background:var(--rosa-suave);color:var(--rosa-fuerte);font-size:18px;
+      width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    }
+    .barra-app-movil .marca-movil{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;}
+    .barra-app-movil .marca-movil .punto{width:9px;height:9px;border-radius:50%;background:var(--rosa-fuerte);flex-shrink:0;}
+
+    #app{display:block;}
+    .sidebar{
+      position:fixed;top:0;left:0;height:100vh;width:78vw;max-width:290px;
+      transform:translateX(-100%);transition:transform .22s ease;z-index:40;box-shadow:2px 0 18px rgba(0,0,0,.18);
+    }
+    .sidebar.abierto{transform:translateX(0);}
+    .overlay-sidebar.visible{display:block;position:fixed;inset:0;background:rgba(43,36,48,.45);z-index:35;}
+
+    main{padding:18px 16px 90px;max-width:100%;}
+    nav.menu button{padding:13px 12px;font-size:15px;}
+    .tabla-simple{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;}
+    .grid-kpi, .grid-erp{grid-template-columns:1fr;}
+    .cabecera-proceso .fila-meta{grid-template-columns:1fr;}
+    .barra-herramientas-proceso{top:0;}
+  }
+  @media (max-width:640px){.mapa-procesos{grid-template-columns:1fr;} .flujo{flex-direction:column;} .flujo .conector{transform:rotate(90deg);}}
   .columna-categoria h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--tinta-suave);margin:0 0 10px;font-weight:700;}
   .tarjeta-proceso{
     background:#fff;border:1px solid var(--borde);border-radius:11px;padding:13px 14px;margin-bottom:10px;
@@ -252,6 +288,8 @@
   .btn-secundario:hover{background:var(--rosa-medio);color:#fff;}
   .tabla-simple{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--borde);border-radius:var(--radio);overflow:hidden;}
   .tabla-simple th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--tinta-suave);background:var(--blanco-hueso);padding:11px 14px;font-weight:700;}
+  .fila-resaltada{animation:destelloResaltado 1.3s ease-in-out 2;}
+  @keyframes destelloResaltado{0%,100%{background:transparent;}50%{background:var(--rosa-suave);}}
   .tabla-simple td{padding:11px 14px;font-size:13.5px;border-top:1px solid var(--borde);}
   .tabla-simple tbody tr{transition:background .12s;}
   .tabla-simple tbody tr:hover{background:var(--rosa-suave);}
@@ -307,8 +345,13 @@
 </div>
 
 <!-- ===================== APP ===================== -->
+<div class="barra-app-movil">
+  <button type="button" id="btn-abrir-menu" aria-label="Abrir menú">☰</button>
+  <div class="marca-movil"><span class="punto"></span><strong>Sistema Operativo</strong></div>
+</div>
+<div class="overlay-sidebar" id="overlay-sidebar"></div>
 <div id="app">
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="marca"><span class="punto"></span><div class="txt"><strong>Sistema Operativo</strong><span>LANA ROSA</span></div></div>
     <nav class="menu">
       <button data-vista="dashboard" class="activo"><span class="ico">◆</span> Dashboard</button>
@@ -562,12 +605,25 @@ function mostrarVista(vista) {
   document.querySelectorAll('nav.menu button').forEach(b => b.classList.toggle('activo', b.dataset.vista === vista));
   document.querySelectorAll('.vista').forEach(v => v.classList.toggle('activa', v.dataset.vista === vista));
   window.scrollTo({ top: 0, behavior: 'instant' });
+  cerrarMenuMovil();
 }
 document.querySelectorAll('nav.menu button').forEach(btn => {
   btn.addEventListener('click', () => mostrarVista(btn.dataset.vista));
 });
 document.getElementById('btn-volver-proceso').addEventListener('click', () => mostrarVista('dashboard'));
 document.getElementById('btn-volver-linea').addEventListener('click', () => mostrarVista('lineas'));
+
+/* ---------------- MENÚ MÓVIL (cajón deslizable) ---------------- */
+function abrirMenuMovil() {
+  document.getElementById('sidebar').classList.add('abierto');
+  document.getElementById('overlay-sidebar').classList.add('visible');
+}
+function cerrarMenuMovil() {
+  document.getElementById('sidebar').classList.remove('abierto');
+  document.getElementById('overlay-sidebar').classList.remove('visible');
+}
+document.getElementById('btn-abrir-menu').addEventListener('click', abrirMenuMovil);
+document.getElementById('overlay-sidebar').addEventListener('click', cerrarMenuMovil);
 
 /* ---------------- CARGA DE DATOS ---------------- */
 async function cargarTodo() {
@@ -1024,26 +1080,60 @@ function abrirDetalleProceso(id) {
     <div class="grid-erp" id="grid-relacionados"></div>`;
 
   renderSeccionesRelacionadas(p);
-  cargarDiagramaFlujo(p.id);
-  if (p.codigo === 'PE-01') cargarModulosEstrategicos(p.id);
-  if (p.codigo === 'PE-02') cargarModulosFinanciacion(p.id);
-  if (p.codigo === 'PE-03') cargarModulosAlianzas(p.id);
-  if (p.codigo === 'PE-04') cargarModulosMarca(p.id);
-  if (p.codigo === 'PM-01') cargarModulosVentas(p.id);
-  if (p.codigo === 'PM-02') cargarModulosProduccion(p.id);
-  if (p.codigo === 'PM-03') cargarModulosAcademy(p.id);
-  if (p.codigo === 'PM-04') cargarModulosInsumos(p.id);
-  if (p.codigo === 'PM-05') cargarModulosLogistica(p.id);
-  if (p.codigo === 'PA-01') cargarModulosFinanciero(p.id);
-  if (p.codigo === 'PA-02') cargarModulosTalentoHumano(p.id);
-  if (p.codigo === 'PA-05') cargarModulosTecnologia(p.id);
-  if (p.codigo === 'PA-06') cargarModulosDocumental(p.id);
-  if (p.codigo === 'PA-07') cargarModulosSst(p.id);
-  if (p.codigo === 'PA-08') cargarModulosAmbiental(p.id);
-  if (p.codigo === 'PEM-01') cargarModulosIndicadoresProceso(p.id);
-  if (p.codigo === 'PEM-02') cargarModulosCalidad(p.id);
-  if (p.codigo === 'PEM-03') cargarModulosRiesgosTransversal(p.id);
-  if (p.codigo === 'PEM-04') cargarModulosMejoraContinua(p.id);
+  const promesasModulos = [cargarDiagramaFlujo(p.id)];
+  if (p.codigo === 'PE-01') promesasModulos.push(cargarModulosEstrategicos(p.id));
+  if (p.codigo === 'PE-02') promesasModulos.push(cargarModulosFinanciacion(p.id));
+  if (p.codigo === 'PE-03') promesasModulos.push(cargarModulosAlianzas(p.id));
+  if (p.codigo === 'PE-04') promesasModulos.push(cargarModulosMarca(p.id));
+  if (p.codigo === 'PM-01') promesasModulos.push(cargarModulosVentas(p.id));
+  if (p.codigo === 'PM-02') promesasModulos.push(cargarModulosProduccion(p.id));
+  if (p.codigo === 'PM-03') promesasModulos.push(cargarModulosAcademy(p.id));
+  if (p.codigo === 'PM-04') promesasModulos.push(cargarModulosInsumos(p.id));
+  if (p.codigo === 'PM-05') promesasModulos.push(cargarModulosLogistica(p.id));
+  if (p.codigo === 'PA-01') promesasModulos.push(cargarModulosFinanciero(p.id));
+  if (p.codigo === 'PA-02') promesasModulos.push(cargarModulosTalentoHumano(p.id));
+  if (p.codigo === 'PA-05') promesasModulos.push(cargarModulosTecnologia(p.id));
+  if (p.codigo === 'PA-06') promesasModulos.push(cargarModulosDocumental(p.id));
+  if (p.codigo === 'PA-07') promesasModulos.push(cargarModulosSst(p.id));
+  if (p.codigo === 'PA-08') promesasModulos.push(cargarModulosAmbiental(p.id));
+  if (p.codigo === 'PEM-01') promesasModulos.push(cargarModulosIndicadoresProceso(p.id));
+  if (p.codigo === 'PEM-02') promesasModulos.push(cargarModulosCalidad(p.id));
+  if (p.codigo === 'PEM-03') promesasModulos.push(cargarModulosRiesgosTransversal(p.id));
+  if (p.codigo === 'PEM-04') promesasModulos.push(cargarModulosMejoraContinua(p.id));
+  Promise.all(promesasModulos).then(() => construirBarraHerramientasProceso());
+}
+
+// Arma automáticamente una barra de pestañas arriba, una por cada bloque
+// de contenido del proceso (Diagrama de flujo, sus módulos específicos,
+// e Información relacionada) — sin importar cuántos tenga cada proceso.
+function construirBarraHerramientasProceso() {
+  const cont = document.getElementById('contenido-detalle-proceso');
+  const anterior = cont.querySelector('.barra-herramientas-proceso');
+  if (anterior) anterior.remove();
+
+  const titulos = Array.from(cont.querySelectorAll('.bloque-titulo'));
+  if (!titulos.length) return;
+  const secciones = titulos.map((titulo, i) => ({ titulo, contenido: titulo.nextElementSibling, idx: i }));
+
+  const barra = document.createElement('div');
+  barra.className = 'barra-herramientas-proceso';
+  barra.innerHTML = secciones.map(s => `<button type="button" class="btn-tab-proceso ${s.idx === 0 ? 'activo' : ''}" data-idx="${s.idx}">${s.titulo.textContent}</button>`).join('');
+
+  const cabecera = cont.querySelector('.cabecera-proceso');
+  cabecera.after(barra);
+
+  function mostrarSeccion(idxActivo) {
+    secciones.forEach(s => {
+      const visible = s.idx === idxActivo;
+      s.titulo.style.display = visible ? '' : 'none';
+      if (s.contenido) s.contenido.style.display = visible ? '' : 'none';
+    });
+    barra.querySelectorAll('.btn-tab-proceso').forEach(b => b.classList.toggle('activo', Number(b.dataset.idx) === idxActivo));
+  }
+  mostrarSeccion(0);
+  barra.querySelectorAll('.btn-tab-proceso').forEach(btn => {
+    btn.addEventListener('click', () => mostrarSeccion(Number(btn.dataset.idx)));
+  });
 }
 
 function renderSeccionesRelacionadas(p) {
@@ -1053,7 +1143,7 @@ function renderSeccionesRelacionadas(p) {
     { titulo: 'Riesgos', tipo: 'riesgo', items: cacheRiesgos.filter(x => x.proceso_id === p.id), texto: x => `<span class="mono">${x.codigo}</span>${x.descripcion}`, pill: x => x.estado, editar: x => abrirFormEditarRiesgo(x.id) },
     { titulo: 'Tareas', tipo: 'tarea', items: cacheTareas.filter(x => x.proceso_id === p.id), texto: x => `<span class="mono">${x.codigo}</span>${x.titulo}`, pill: x => x.estado, editar: x => abrirFormEditarTarea(x.id) },
     { titulo: 'Indicadores', tipo: 'indicador', items: cacheIndicadores.filter(x => x.proceso_id === p.id), texto: x => `<span class="mono">${x.codigo}</span>${x.nombre}`, pill: x => x.semaforo, editar: x => abrirFormEditarIndicador(x.id) },
-    { titulo: 'Documentos', tipo: 'documento', items: cacheDocumentos.filter(x => x.proceso_id === p.id), texto: x => `<span class="mono">${x.codigo}</span>${x.nombre}`, pill: x => x.estado, editar: x => abrirFormEditarDocumento(x.id) },
+    { titulo: 'Documentos', tipo: 'documento', items: cacheDocumentos.filter(x => x.proceso_id === p.id), texto: x => `<span class="mono">${x.codigo}</span>${x.nombre}`, pill: x => x.estado, editar: x => irADocumentoEnModulo(x.id) },
   ];
 
   const grid = document.getElementById('grid-relacionados');
@@ -2737,22 +2827,63 @@ const ESTANDARES_SST = [
 ];
 const ETIQUETAS_NIVEL_PELIGRO = { bajo: 'Bajo', medio: 'Medio', alto: 'Alto' };
 
+const ETIQUETAS_TIPO_CAPACITACION_SST = { curso_50h: 'Curso 50 horas', capacitacion: 'Capacitación', actividad_prevencion: 'Actividad de prevención' };
+const ETIQUETAS_TIPO_EXAMEN = { ingreso: 'Ingreso', periodico: 'Periódico', egreso: 'Egreso' };
+const ETIQUETAS_TIPO_ACCIDENTE = { accidente: 'Accidente de trabajo', incidente: 'Incidente' };
+
 async function cargarModulosSst(procesoId) {
   const bloque = document.getElementById('bloque-estrategico');
   bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
 
-  const [{ data: autoevaluaciones }, { data: peligros }] = await Promise.all([
+  const [{ data: autoevaluaciones }, { data: peligros }, { data: responsable }, { data: capacitaciones }, { data: examenes }, { data: incidentes }, { data: sociodem }, { data: entregasEpp }] = await Promise.all([
     supabase.from('sgsst_autoevaluacion').select('*').eq('proceso_id', procesoId).order('periodo', { ascending: false }),
     supabase.from('identificacion_peligros').select('*').eq('proceso_id', procesoId).order('nivel', { ascending: false }),
+    supabase.from('responsable_sst').select('*').eq('proceso_id', procesoId).maybeSingle(),
+    supabase.from('capacitaciones_sst').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+    supabase.from('evaluaciones_medicas_ocupacionales').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+    supabase.from('accidentes_incidentes').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+    supabase.from('descripcion_sociodemografica').select('*').eq('proceso_id', procesoId).maybeSingle(),
+    supabase.from('entrega_epp').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
   ]);
+  const resp = responsable || {};
+  const sd = sociodem || {};
 
   bloque.innerHTML = `
-    <div class="bloque-titulo">Autoevaluación SG-SST (7 estándares mínimos — Res. 0312 de 2019)</div>
+    <div class="bloque-titulo">Qué exige la norma (Resolución 0312 de 2019)</div>
     <div class="panel-erp">
-      <p style="font-size:12.5px;color:var(--tinta-suave);margin-top:0;">Aplica a empresas de 10 o menos trabajadores con riesgo I, II o III — el caso de Lana Rosa. Se reporta al menos una vez al año.</p>
+      <p style="font-size:13px;">Lana Rosa, con 10 o menos trabajadores y riesgo clase I, debe cumplir <b>7 estándares mínimos</b> (Capítulo 1, artículo 3):</p>
+      <ol style="font-size:12.5px;padding-left:18px;line-height:1.7;">
+        <li><b>Persona asignada al SG-SST</b> — con curso virtual gratuito de 50 horas (Ministerio de Trabajo/SENA).</li>
+        <li><b>Afiliación al Sistema General de Riesgos Laborales (ARL)</b> — todos los trabajadores afiliados.</li>
+        <li><b>Capacitación en SST.</b></li>
+        <li><b>Plan anual de trabajo</b> — objetivos, metas, responsables, recursos y cronograma.</li>
+        <li><b>Evaluaciones médicas ocupacionales</b> — de ingreso, periódicas y de egreso.</li>
+        <li><b>Identificación de peligros, evaluación y valoración de riesgos.</b></li>
+        <li><b>Medidas de prevención y control</b> frente a esos peligros.</li>
+      </ol>
+      <p style="font-size:12.5px;color:var(--tinta-suave);"><b>Dos obligaciones adicionales, sin importar el tamaño de la empresa:</b> desde diciembre de 2019 hay que enviar la autoevaluación anual a la ARL para su revisión; y cualquier accidente de trabajo se debe reportar dentro de los <b>2 días hábiles</b> siguientes al evento.</p>
+    </div>
+
+    <div class="bloque-titulo">Responsable de SST</div>
+    <div class="panel-erp">
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Nombre</label>
+      <input type="text" id="rs-nombre" value="${resp.nombre || ''}" />
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);"><input type="checkbox" id="rs-curso" ${resp.tiene_curso_50h ? 'checked' : ''} style="width:auto;margin-right:6px;" />Tiene el curso virtual de 50 horas</label>
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);margin-top:8px;">Fecha del curso</label>
+      <input type="date" id="rs-fecha-curso" value="${resp.fecha_curso || ''}" />
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Contacto</label>
+      <input type="text" id="rs-contacto" value="${resp.contacto || ''}" />
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Notas</label>
+      <textarea id="rs-notas">${resp.notas || ''}</textarea>
+      <button type="button" class="btn-secundario" id="btn-guardar-responsable-sst" style="margin-top:8px;">Guardar</button>
+    </div>
+
+    <div class="bloque-titulo">Autoevaluación SG-SST</div>
+    <div class="panel-erp">
+      <p style="font-size:12.5px;color:var(--tinta-suave);margin-top:0;">Se hace al menos una vez al año, y se envía copia a la ARL.</p>
       <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-autoevaluacion">+ Nueva autoevaluación</button></div>
       <table class="tabla-simple">
-        <thead><tr><th>Período</th><th>Estándares cumplidos</th><th>Responsable</th><th>Fecha</th><th></th></tr></thead>
+        <thead><tr><th>Período</th><th>Estándares cumplidos</th><th>Responsable</th><th>Fecha</th><th>Enviada a ARL</th><th></th></tr></thead>
         <tbody>
           ${(autoevaluaciones || []).map(a => {
             const cumplidos = ESTANDARES_SST.filter(e => a[e.campo]).length;
@@ -2762,9 +2893,10 @@ async function cargarModulosSst(procesoId) {
               <td class="mono" style="${cumplidos < 7 ? 'color:var(--ambar);font-weight:700;' : 'color:var(--verde);font-weight:700;'}">${cumplidos}/7</td>
               <td>${a.responsable || '—'}</td>
               <td>${a.fecha}</td>
+              <td>${a.enviada_arl ? `<span class="pill cumplida">✓ ${a.fecha_envio_arl || ''}</span>` : '<span class="pill pendiente">Pendiente</span>'}</td>
               <td><button type="button" class="btn-editar-fila btn-editar-autoeval" data-id="${a.id}" title="Editar">✎</button></td>
             </tr>`;
-          }).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin autoevaluaciones registradas todavía.</td></tr>'}
+          }).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin autoevaluaciones registradas todavía.</td></tr>'}
         </tbody>
       </table>
     </div>
@@ -2785,7 +2917,126 @@ async function cargarModulosSst(procesoId) {
             </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin peligros registrados todavía.</td></tr>'}
         </tbody>
       </table>
+    </div>
+
+    <div class="bloque-titulo">Capacitaciones y actividades de prevención</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-capacitacion-sst">+ Registrar capacitación</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Fecha</th><th>Tema</th><th>Tipo</th><th>Horas</th><th>Participantes</th></tr></thead>
+        <tbody>
+          ${(capacitaciones || []).map(c => `
+            <tr>
+              <td>${c.fecha}</td>
+              <td>${c.tema}</td>
+              <td>${ETIQUETAS_TIPO_CAPACITACION_SST[c.tipo] || c.tipo}</td>
+              <td class="mono">${c.horas ?? '—'}</td>
+              <td>${c.participantes || '—'}</td>
+            </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin capacitaciones registradas todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bloque-titulo">Evaluaciones médicas ocupacionales</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-eval-medica">+ Registrar evaluación</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Empleado</th><th>Tipo</th><th>Fecha</th><th>Resultado</th><th>Próxima</th></tr></thead>
+        <tbody>
+          ${(examenes || []).map(e => `
+            <tr>
+              <td>${e.empleado}</td>
+              <td>${ETIQUETAS_TIPO_EXAMEN[e.tipo_examen] || e.tipo_examen}</td>
+              <td>${e.fecha}</td>
+              <td>${e.resultado || '—'}</td>
+              <td>${e.proxima_evaluacion || '—'}</td>
+            </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin evaluaciones registradas todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bloque-titulo">Accidentes e incidentes de trabajo</div>
+    <div class="panel-erp">
+      <p style="font-size:12.5px;color:var(--tinta-suave);margin-top:0;">Todo accidente de trabajo se debe reportar a la ARL dentro de los 2 días hábiles siguientes.</p>
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nuevo-accidente">+ Registrar accidente/incidente</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Fecha</th><th>Empleado</th><th>Tipo</th><th>Descripción</th><th>Reportado a ARL</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+          ${(incidentes || []).map(i => {
+            const diasTranscurridos = Math.floor((Date.now() - new Date(i.fecha).getTime()) / 86400000);
+            const alertaPlazo = i.tipo === 'accidente' && !i.reportado_arl && diasTranscurridos > 2;
+            return `
+            <tr>
+              <td>${i.fecha}</td>
+              <td>${i.empleado || '—'}</td>
+              <td>${ETIQUETAS_TIPO_ACCIDENTE[i.tipo] || i.tipo}</td>
+              <td>${i.descripcion}</td>
+              <td>${i.reportado_arl ? '✓ Sí' : alertaPlazo ? '<span class="pill vencida">✗ Vencido</span>' : '✗ No'}</td>
+              <td><span class="pill ${i.estado === 'cerrado' ? 'cumplida' : 'pendiente'}">${i.estado}</span></td>
+              <td><button type="button" class="btn-editar-fila btn-editar-accidente" data-id="${i.id}" title="Editar">✎</button></td>
+            </tr>`;
+          }).join('') || '<tr><td colspan="7" style="color:#6b6270;">Sin accidentes ni incidentes registrados. ✓</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bloque-titulo">Descripción sociodemográfica</div>
+    <div class="panel-erp">
+      <p style="font-size:12.5px;color:var(--tinta-suave);margin-top:0;">Exigido por el Decreto 1072 de 2015 — perfil básico de la población trabajadora.</p>
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Total de trabajadores</label>
+      <input type="number" id="sd-total" value="${sd.total_trabajadores ?? ''}" />
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Rango de edades</label>
+      <input type="text" id="sd-edades" value="${sd.rango_edades || ''}" placeholder="Ej: 20 a 55 años" />
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Cargos</label>
+      <textarea id="sd-cargos" placeholder="Ej: Administradora, líder de taller, cajera...">${sd.cargos || ''}</textarea>
+      <label style="font-size:11px;font-weight:700;color:var(--tinta-suave);">Condiciones de salud relevantes</label>
+      <textarea id="sd-condiciones" placeholder="Solo lo relevante para prevención — sin detalles médicos privados">${sd.condiciones_relevantes || ''}</textarea>
+      <button type="button" class="btn-secundario" id="btn-guardar-sociodem" style="margin-top:8px;">Guardar</button>
+    </div>
+
+    <div class="bloque-titulo">Entrega de elementos de protección personal (EPP)</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-entrega-epp">+ Registrar entrega</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Fecha</th><th>Empleado</th><th>Elemento</th><th>Cantidad</th><th>Confirmado</th></tr></thead>
+        <tbody>
+          ${(entregasEpp || []).map(ep => `
+            <tr>
+              <td>${ep.fecha}</td>
+              <td>${ep.empleado}</td>
+              <td>${ep.elemento}</td>
+              <td class="mono">${ep.cantidad ?? 1}</td>
+              <td>${ep.confirmado ? '✓ Sí' : '✗ No'}</td>
+            </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin entregas registradas todavía.</td></tr>'}
+        </tbody>
+      </table>
     </div>`;
+
+  document.getElementById('btn-guardar-sociodem').addEventListener('click', async () => {
+    await supabase.from('descripcion_sociodemografica').upsert({
+      proceso_id: procesoId,
+      total_trabajadores: document.getElementById('sd-total').value || null,
+      rango_edades: document.getElementById('sd-edades').value,
+      cargos: document.getElementById('sd-cargos').value,
+      condiciones_relevantes: document.getElementById('sd-condiciones').value,
+      actualizado_en: new Date().toISOString()
+    }, { onConflict: 'proceso_id' });
+    cargarModulosSst(procesoId);
+  });
+  document.getElementById('btn-nueva-entrega-epp').addEventListener('click', () => abrirFormEntregaEpp(procesoId));
+
+  document.getElementById('btn-guardar-responsable-sst').addEventListener('click', async () => {
+    await supabase.from('responsable_sst').upsert({
+      proceso_id: procesoId,
+      nombre: document.getElementById('rs-nombre').value,
+      tiene_curso_50h: document.getElementById('rs-curso').checked,
+      fecha_curso: document.getElementById('rs-fecha-curso').value || null,
+      contacto: document.getElementById('rs-contacto').value,
+      notas: document.getElementById('rs-notas').value,
+      actualizado_en: new Date().toISOString()
+    }, { onConflict: 'proceso_id' });
+    cargarModulosSst(procesoId);
+  });
 
   document.getElementById('btn-nueva-autoevaluacion').addEventListener('click', () => abrirFormAutoevaluacionSst(procesoId));
   bloque.querySelectorAll('.btn-editar-autoeval').forEach(btn => {
@@ -2795,6 +3046,139 @@ async function cargarModulosSst(procesoId) {
   bloque.querySelectorAll('.btn-editar-peligro').forEach(btn => {
     btn.addEventListener('click', () => abrirFormPeligro(procesoId, (peligros || []).find(p => p.id === btn.dataset.id)));
   });
+  document.getElementById('btn-nueva-capacitacion-sst').addEventListener('click', () => abrirFormCapacitacionSst(procesoId));
+  document.getElementById('btn-nueva-eval-medica').addEventListener('click', () => abrirFormEvalMedica(procesoId));
+  document.getElementById('btn-nuevo-accidente').addEventListener('click', () => abrirFormAccidente(procesoId));
+  bloque.querySelectorAll('.btn-editar-accidente').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormAccidente(procesoId, (incidentes || []).find(i => i.id === btn.dataset.id)));
+  });
+}
+
+function abrirFormCapacitacionSst(procesoId) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Registrar capacitación';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Tema</label><input type="text" id="f-tema-cap" required placeholder="Ej: Curso 50 horas SG-SST, manejo de tijeras/agujas..." /></div>
+    <div class="campo"><label>Tipo</label><select id="f-tipo-cap">
+      ${Object.entries(ETIQUETAS_TIPO_CAPACITACION_SST).map(([v,l]) => `<option value="${v}">${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-cap" required value="${new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label>Horas</label><input type="number" step="any" id="f-horas-cap" /></div>
+    <div class="campo"><label>Participantes</label><input type="text" id="f-participantes-cap" /></div>
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable-cap" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('capacitaciones_sst').insert({
+      proceso_id: procesoId,
+      tema: document.getElementById('f-tema-cap').value,
+      tipo: document.getElementById('f-tipo-cap').value,
+      fecha: document.getElementById('f-fecha-cap').value,
+      horas: document.getElementById('f-horas-cap').value || null,
+      participantes: document.getElementById('f-participantes-cap').value,
+      responsable: document.getElementById('f-responsable-cap').value
+    });
+    cerrarForm();
+    cargarModulosSst(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+function abrirFormEvalMedica(procesoId) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Registrar evaluación médica';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Empleado</label><input type="text" id="f-empleado-em" required /></div>
+    <div class="campo"><label>Tipo de examen</label><select id="f-tipo-em">
+      ${Object.entries(ETIQUETAS_TIPO_EXAMEN).map(([v,l]) => `<option value="${v}">${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-em" required value="${new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label>Resultado</label><input type="text" id="f-resultado-em" placeholder="Ej: Apto sin restricciones" /></div>
+    <div class="campo"><label>Próxima evaluación</label><input type="date" id="f-proxima-em" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('evaluaciones_medicas_ocupacionales').insert({
+      proceso_id: procesoId,
+      empleado: document.getElementById('f-empleado-em').value,
+      tipo_examen: document.getElementById('f-tipo-em').value,
+      fecha: document.getElementById('f-fecha-em').value,
+      resultado: document.getElementById('f-resultado-em').value,
+      proxima_evaluacion: document.getElementById('f-proxima-em').value || null
+    });
+    cerrarForm();
+    cargarModulosSst(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+function abrirFormAccidente(procesoId, accidenteExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = accidenteExistente ? 'Editar registro' : 'Registrar accidente/incidente';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Tipo</label><select id="f-tipo-acc">
+      ${Object.entries(ETIQUETAS_TIPO_ACCIDENTE).map(([v,l]) => `<option value="${v}" ${accidenteExistente && accidenteExistente.tipo===v ? 'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Empleado</label><input type="text" id="f-empleado-acc" value="${accidenteExistente ? (accidenteExistente.empleado||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Descripción</label><textarea id="f-descripcion-acc" required>${accidenteExistente ? (accidenteExistente.descripcion || '') : ''}</textarea></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-acc" value="${accidenteExistente && accidenteExistente.fecha ? accidenteExistente.fecha : new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label><input type="checkbox" id="f-reportado-acc" ${accidenteExistente && accidenteExistente.reportado_arl ? 'checked' : ''} style="width:auto;margin-right:8px;" />Reportado a la ARL</label></div>
+    <div class="campo"><label>Fecha de reporte a la ARL</label><input type="date" id="f-fecha-reporte-acc" value="${accidenteExistente && accidenteExistente.fecha_reporte_arl ? accidenteExistente.fecha_reporte_arl : ''}" /></div>
+    <div class="campo"><label>Acciones correctivas</label><textarea id="f-acciones-acc">${accidenteExistente ? (accidenteExistente.acciones_correctivas || '') : ''}</textarea></div>
+    <div class="campo"><label>Estado</label><select id="f-estado-acc">
+      <option value="abierto" ${accidenteExistente && accidenteExistente.estado==='abierto' ? 'selected':''}>Abierto</option>
+      <option value="cerrado" ${accidenteExistente && accidenteExistente.estado==='cerrado' ? 'selected':''}>Cerrado</option>
+    </select></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      tipo: document.getElementById('f-tipo-acc').value,
+      empleado: document.getElementById('f-empleado-acc').value,
+      descripcion: document.getElementById('f-descripcion-acc').value,
+      fecha: document.getElementById('f-fecha-acc').value,
+      reportado_arl: document.getElementById('f-reportado-acc').checked,
+      fecha_reporte_arl: document.getElementById('f-fecha-reporte-acc').value || null,
+      acciones_correctivas: document.getElementById('f-acciones-acc').value,
+      estado: document.getElementById('f-estado-acc').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (accidenteExistente) {
+      await supabase.from('accidentes_incidentes').update(datos).eq('id', accidenteExistente.id);
+    } else {
+      await supabase.from('accidentes_incidentes').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosSst(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+function abrirFormEntregaEpp(procesoId) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = 'Registrar entrega de EPP';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Empleado</label><input type="text" id="f-empleado-epp" required /></div>
+    <div class="campo"><label>Elemento</label><input type="text" id="f-elemento-epp" required placeholder="Ej: Guantes, tapabocas, gafas de protección..." /></div>
+    <div class="campo"><label>Cantidad</label><input type="number" id="f-cantidad-epp" value="1" /></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-epp" required value="${new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label><input type="checkbox" id="f-confirmado-epp" style="width:auto;margin-right:8px;" />Confirmado por el empleado</label></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    await supabase.from('entrega_epp').insert({
+      proceso_id: procesoId,
+      empleado: document.getElementById('f-empleado-epp').value,
+      elemento: document.getElementById('f-elemento-epp').value,
+      cantidad: document.getElementById('f-cantidad-epp').value || 1,
+      fecha: document.getElementById('f-fecha-epp').value,
+      confirmado: document.getElementById('f-confirmado-epp').checked
+    });
+    cerrarForm();
+    cargarModulosSst(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
 
 function abrirFormAutoevaluacionSst(procesoId, autoevalExistente) {
@@ -2806,6 +3190,8 @@ function abrirFormAutoevaluacionSst(procesoId, autoevalExistente) {
     <div class="campo"><label>Responsable</label><input type="text" id="f-responsable-sst" value="${autoevalExistente ? (autoevalExistente.responsable||'').replace(/"/g,'&quot;') : ''}" /></div>
     <div class="campo"><label>Observaciones</label><textarea id="f-observaciones-sst">${autoevalExistente ? (autoevalExistente.observaciones || '') : ''}</textarea></div>
     <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-sst" value="${autoevalExistente && autoevalExistente.fecha ? autoevalExistente.fecha : new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label><input type="checkbox" id="f-enviada-arl-sst" ${autoevalExistente && autoevalExistente.enviada_arl ? 'checked' : ''} style="width:auto;margin-right:8px;" />Enviada a la ARL para revisión</label></div>
+    <div class="campo"><label>Fecha de envío a la ARL</label><input type="date" id="f-fecha-envio-arl-sst" value="${autoevalExistente && autoevalExistente.fecha_envio_arl ? autoevalExistente.fecha_envio_arl : ''}" /></div>
     <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
   formGenerico.onsubmit = async (e) => {
     e.preventDefault();
@@ -2815,6 +3201,8 @@ function abrirFormAutoevaluacionSst(procesoId, autoevalExistente) {
       responsable: document.getElementById('f-responsable-sst').value,
       observaciones: document.getElementById('f-observaciones-sst').value,
       fecha: document.getElementById('f-fecha-sst').value,
+      enviada_arl: document.getElementById('f-enviada-arl-sst').checked,
+      fecha_envio_arl: document.getElementById('f-fecha-envio-arl-sst').value || null,
       actualizado_en: new Date().toISOString()
     };
     ESTANDARES_SST.forEach(e => { datos[e.campo] = document.getElementById('f-' + e.campo).checked; });
@@ -3615,7 +4003,7 @@ async function cargarDocumentos() {
   cacheDocumentos = data || [];
   const cont = document.getElementById('tabla-documentos');
   cont.innerHTML = cacheDocumentos.map(d => `
-    <tr>
+    <tr data-id="${d.id}">
       <td class="mono">${d.codigo}</td>
       <td>${d.nombre}</td>
       <td>${d.version}</td>
@@ -3633,6 +4021,17 @@ async function cargarDocumentos() {
   });
   cont.querySelectorAll('.btn-editar-fila').forEach(btn => {
     btn.addEventListener('click', () => abrirFormEditarDocumento(btn.dataset.id));
+  });
+}
+
+function irADocumentoEnModulo(id) {
+  mostrarVista('documentos');
+  requestAnimationFrame(() => {
+    const fila = document.querySelector(`#tabla-documentos tr[data-id="${id}"]`);
+    if (!fila) return;
+    fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    fila.classList.add('fila-resaltada');
+    setTimeout(() => fila.classList.remove('fila-resaltada'), 2600);
   });
 }
 
