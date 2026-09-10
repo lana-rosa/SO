@@ -157,7 +157,7 @@
   .cabecera-proceso .cod{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--rosa-fuerte);font-weight:700;}
   .cabecera-proceso h2{margin:4px 0 12px;font-size:22px;}
 
-  .barra-herramientas-proceso{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:4px 0 14px;margin-bottom:6px;border-bottom:1px solid var(--borde);position:sticky;top:0;background:var(--blanco-hueso);z-index:5;}
+  .barra-herramientas-proceso{display:flex;flex-wrap:wrap;gap:6px;padding:4px 0 14px;margin-bottom:6px;border-bottom:1px solid var(--borde);position:sticky;top:0;background:var(--blanco-hueso);z-index:5;}
   .btn-tab-proceso{flex-shrink:0;border:1px solid var(--borde);background:#fff;color:var(--tinta-suave);font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:20px;cursor:pointer;white-space:nowrap;transition:background .12s,color .12s;}
   .btn-tab-proceso:hover{background:var(--rosa-suave);}
   .btn-tab-proceso.activo{background:var(--rosa-fuerte);color:#fff;border-color:var(--rosa-fuerte);}
@@ -1090,6 +1090,8 @@ function abrirDetalleProceso(id) {
   if (p.codigo === 'PM-03') promesasModulos.push(cargarModulosAcademy(p.id));
   if (p.codigo === 'PM-04') promesasModulos.push(cargarModulosInsumos(p.id));
   if (p.codigo === 'PM-05') promesasModulos.push(cargarModulosLogistica(p.id));
+  if (p.codigo === 'PA-03') promesasModulos.push(cargarModulosCompras(p.id));
+  if (p.codigo === 'PA-04') promesasModulos.push(cargarModulosInventarioGeneral(p.id));
   if (p.codigo === 'PA-01') promesasModulos.push(cargarModulosFinanciero(p.id));
   if (p.codigo === 'PA-02') promesasModulos.push(cargarModulosTalentoHumano(p.id));
   if (p.codigo === 'PA-05') promesasModulos.push(cargarModulosTecnologia(p.id));
@@ -2395,6 +2397,170 @@ function abrirFormIncidencia(procesoId, incidenciaExistente) {
 }
 
 /* ---------------- MÓDULO FINANCIERO — CIERRE MENSUAL (PA-01) ---------------- */
+/* ---------------- MÓDULO DE COMPRAS Y PROVEEDORES (PA-03) ---------------- */
+const ETIQUETAS_ESTADO_SOLICITUD = { solicitada: 'Solicitada', cotizando: 'Cotizando', aprobada: 'Aprobada', convertida_orden: 'Convertida en orden', rechazada: 'Rechazada' };
+
+async function cargarModulosCompras(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const { data: solicitudes } = await supabase.from('solicitudes_compra').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false });
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Solicitudes de compra</div>
+    <div class="panel-erp">
+      <p style="font-size:12.5px;color:var(--tinta-suave);margin-top:0;">Antes de crear la orden de compra en el ERP: qué se necesita, se comparan al menos 3 cotizaciones, y se aprueba. La orden de compra en sí se sigue creando en el ERP como siempre.</p>
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-solicitud-compra">+ Nueva solicitud</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Fecha</th><th>Descripción</th><th>Solicitante</th><th>Proveedor elegido</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+          ${(solicitudes || []).map(s => `
+            <tr>
+              <td>${s.fecha}</td>
+              <td>${s.descripcion}</td>
+              <td>${s.solicitante || '—'}</td>
+              <td>${s.proveedor_elegido || '—'}</td>
+              <td>
+                <select class="select-estado pill ${s.estado === 'aprobada' || s.estado === 'convertida_orden' ? 'cumplida' : s.estado === 'rechazada' ? 'cancelada' : 'pendiente'}" data-id="${s.id}">
+                  ${Object.entries(ETIQUETAS_ESTADO_SOLICITUD).map(([v,l]) => `<option value="${v}" ${s.estado===v?'selected':''}>${l}</option>`).join('')}
+                </select>
+              </td>
+              <td><button type="button" class="btn-editar-fila btn-editar-solicitud-compra" data-id="${s.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin solicitudes de compra registradas todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+
+  bloque.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      await supabase.from('solicitudes_compra').update({ estado: sel.value, actualizado_en: new Date().toISOString() }).eq('id', sel.dataset.id);
+      cargarModulosCompras(procesoId);
+    });
+  });
+  document.getElementById('btn-nueva-solicitud-compra').addEventListener('click', () => abrirFormSolicitudCompra(procesoId));
+  bloque.querySelectorAll('.btn-editar-solicitud-compra').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormSolicitudCompra(procesoId, (solicitudes || []).find(s => s.id === btn.dataset.id)));
+  });
+}
+
+function abrirFormSolicitudCompra(procesoId, solicitudExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = solicitudExistente ? 'Editar solicitud de compra' : 'Nueva solicitud de compra';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Descripción de lo que se necesita</label><textarea id="f-descripcion-sc" required>${solicitudExistente ? (solicitudExistente.descripcion || '') : ''}</textarea></div>
+    <div class="campo"><label>Cantidad</label><input type="text" id="f-cantidad-sc" value="${solicitudExistente ? (solicitudExistente.cantidad||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Solicitante</label><input type="text" id="f-solicitante-sc" value="${solicitudExistente ? (solicitudExistente.solicitante||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Para qué proceso/área</label><input type="text" id="f-para-proceso-sc" value="${solicitudExistente ? (solicitudExistente.para_proceso||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: Taller, Tienda, Academy..." /></div>
+    <div class="campo"><label>Justificación</label><textarea id="f-justificacion-sc">${solicitudExistente ? (solicitudExistente.justificacion || '') : ''}</textarea></div>
+    <div class="campo"><label>Fecha en que se necesita</label><input type="date" id="f-fecha-necesaria-sc" value="${solicitudExistente && solicitudExistente.fecha_necesaria ? solicitudExistente.fecha_necesaria : ''}" /></div>
+    <div class="campo"><label>Cotizaciones comparadas</label><textarea id="f-cotizaciones-sc" placeholder="Ej: Proveedor A $50.000, Proveedor B $47.000, Proveedor C $52.000">${solicitudExistente ? (solicitudExistente.cotizaciones || '') : ''}</textarea></div>
+    <div class="campo"><label>Proveedor elegido</label><input type="text" id="f-proveedor-elegido-sc" value="${solicitudExistente ? (solicitudExistente.proveedor_elegido||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Aprobado por</label><input type="text" id="f-aprobado-por-sc" value="${solicitudExistente ? (solicitudExistente.aprobado_por||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Referencia de la orden en el ERP</label><input type="text" id="f-referencia-erp-sc" value="${solicitudExistente ? (solicitudExistente.referencia_orden_erp||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: OC-2026-014" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      descripcion: document.getElementById('f-descripcion-sc').value,
+      cantidad: document.getElementById('f-cantidad-sc').value,
+      solicitante: document.getElementById('f-solicitante-sc').value,
+      para_proceso: document.getElementById('f-para-proceso-sc').value,
+      justificacion: document.getElementById('f-justificacion-sc').value,
+      fecha_necesaria: document.getElementById('f-fecha-necesaria-sc').value || null,
+      cotizaciones: document.getElementById('f-cotizaciones-sc').value,
+      proveedor_elegido: document.getElementById('f-proveedor-elegido-sc').value,
+      aprobado_por: document.getElementById('f-aprobado-por-sc').value,
+      referencia_orden_erp: document.getElementById('f-referencia-erp-sc').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (solicitudExistente) {
+      await supabase.from('solicitudes_compra').update(datos).eq('id', solicitudExistente.id);
+    } else {
+      await supabase.from('solicitudes_compra').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosCompras(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+/* ---------------- MÓDULO DE INVENTARIO — MERMAS Y PÉRDIDAS (PA-04) ---------------- */
+const ETIQUETAS_CAUSA_MERMA = { dano: 'Daño', obsolescencia: 'Obsolescencia', extravio: 'Extravío', error_registro: 'Error de registro', otro: 'Otro' };
+
+async function cargarModulosInventarioGeneral(procesoId) {
+  const bloque = document.getElementById('bloque-estrategico');
+  bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
+
+  const { data: mermas } = await supabase.from('mermas_perdidas').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false });
+  const totalValor = (mermas || []).reduce((acc, m) => acc + (Number(m.valor_estimado) || 0), 0);
+
+  bloque.innerHTML = `
+    <div class="bloque-titulo">Mermas y pérdidas de inventario</div>
+    <div class="panel-erp">
+      <p style="font-size:12.5px;color:var(--tinta-suave);margin-top:0;">Cuando el inventario físico no coincide con lo que dice el sistema — por daño, obsolescencia, extravío o error. El catálogo, alertas de stock y toma física ya se manejan en el ERP.</p>
+      ${totalValor > 0 ? `<div class="fila-metrica" style="margin-bottom:10px;"><span class="etq">Valor total estimado de mermas</span><span class="val neg">${formatoCOP(totalValor)}</span></div>` : ''}
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nueva-merma">+ Registrar merma/pérdida</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Fecha</th><th>Ítem</th><th>Cantidad</th><th>Causa</th><th>Valor estimado</th><th></th></tr></thead>
+        <tbody>
+          ${(mermas || []).map(m => `
+            <tr>
+              <td>${m.fecha}</td>
+              <td>${m.item}</td>
+              <td class="mono">${m.cantidad ?? '—'}</td>
+              <td>${ETIQUETAS_CAUSA_MERMA[m.causa] || m.causa}</td>
+              <td class="mono">${m.valor_estimado ? formatoCOP(m.valor_estimado) : '—'}</td>
+              <td><button type="button" class="btn-editar-fila btn-editar-merma" data-id="${m.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin mermas ni pérdidas registradas. ✓</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById('btn-nueva-merma').addEventListener('click', () => abrirFormMerma(procesoId));
+  bloque.querySelectorAll('.btn-editar-merma').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormMerma(procesoId, (mermas || []).find(m => m.id === btn.dataset.id)));
+  });
+}
+
+function abrirFormMerma(procesoId, mermaExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = mermaExistente ? 'Editar merma/pérdida' : 'Registrar merma/pérdida';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Ítem</label><input type="text" id="f-item-merma" required value="${mermaExistente ? (mermaExistente.item||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Cantidad</label><input type="number" step="any" id="f-cantidad-merma" value="${mermaExistente && mermaExistente.cantidad != null ? mermaExistente.cantidad : ''}" /></div>
+    <div class="campo"><label>Causa</label><select id="f-causa-merma">
+      ${Object.entries(ETIQUETAS_CAUSA_MERMA).map(([v,l]) => `<option value="${v}" ${mermaExistente && mermaExistente.causa===v ? 'selected':''}>${l}</option>`).join('')}
+    </select></div>
+    <div class="campo"><label>Valor estimado</label><input type="number" step="any" id="f-valor-merma" value="${mermaExistente && mermaExistente.valor_estimado != null ? mermaExistente.valor_estimado : ''}" /></div>
+    <div class="campo"><label>Descripción</label><textarea id="f-descripcion-merma">${mermaExistente ? (mermaExistente.descripcion || '') : ''}</textarea></div>
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable-merma" value="${mermaExistente ? (mermaExistente.responsable||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-merma" value="${mermaExistente && mermaExistente.fecha ? mermaExistente.fecha : new Date().toISOString().slice(0,10)}" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      item: document.getElementById('f-item-merma').value,
+      cantidad: document.getElementById('f-cantidad-merma').value || null,
+      causa: document.getElementById('f-causa-merma').value,
+      valor_estimado: document.getElementById('f-valor-merma').value || null,
+      descripcion: document.getElementById('f-descripcion-merma').value,
+      responsable: document.getElementById('f-responsable-merma').value,
+      fecha: document.getElementById('f-fecha-merma').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (mermaExistente) {
+      await supabase.from('mermas_perdidas').update(datos).eq('id', mermaExistente.id);
+    } else {
+      await supabase.from('mermas_perdidas').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosInventarioGeneral(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
 async function cargarModulosFinanciero(procesoId) {
   const bloque = document.getElementById('bloque-estrategico');
   bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
@@ -2589,9 +2755,11 @@ async function cargarModulosTecnologia(procesoId) {
   const bloque = document.getElementById('bloque-estrategico');
   bloque.innerHTML = '<div class="panel-erp"><div class="vacio-mini">Cargando…</div></div>';
 
-  const [{ data: activos }, { data: incidentes }] = await Promise.all([
+  const [{ data: activos }, { data: incidentes }, { data: mantenimientos }, { data: accesos }] = await Promise.all([
     supabase.from('activos_tecnologicos').select('*').eq('proceso_id', procesoId).order('criticidad', { ascending: false }),
     supabase.from('incidentes_tecnicos').select('*').eq('proceso_id', procesoId).order('fecha', { ascending: false }),
+    supabase.from('mantenimiento_tecnologico').select('*').eq('proceso_id', procesoId).order('periodo', { ascending: false }),
+    supabase.from('gestion_accesos').select('*').eq('proceso_id', procesoId).order('persona'),
   ]);
 
   bloque.innerHTML = `
@@ -2634,7 +2802,69 @@ async function cargarModulosTecnologia(procesoId) {
             </tr>`).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin incidentes registrados. ✓</td></tr>'}
         </tbody>
       </table>
+    </div>
+
+    <div class="bloque-titulo">Mantenimiento y revisión periódica</div>
+    <div class="panel-erp">
+      <p style="font-size:12.5px;color:var(--tinta-suave);margin-top:0;">Basado en ISO 27001 (Anexo A) — copias de seguridad, actualizaciones, dominios y permisos deben revisarse periódicamente, no solo cuando algo ya falló.</p>
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nuevo-mantenimiento">+ Nueva revisión</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Período</th><th>Verificaciones al día</th><th>Responsable</th><th>Fecha</th><th></th></tr></thead>
+        <tbody>
+          ${(mantenimientos || []).map(m => {
+            const items = [m.backups_verificados, m.actualizaciones_revisadas, m.dominios_certificados_vigentes, m.permisos_base_datos_verificados];
+            const hechos = items.filter(Boolean).length;
+            return `
+            <tr>
+              <td>${m.periodo}</td>
+              <td class="mono" style="${hechos < 4 ? 'color:var(--ambar);font-weight:700;' : 'color:var(--verde);font-weight:700;'}">${hechos}/4</td>
+              <td>${m.responsable || '—'}</td>
+              <td>${m.fecha}</td>
+              <td><button type="button" class="btn-editar-fila btn-editar-mantenimiento" data-id="${m.id}" title="Editar">✎</button></td>
+            </tr>`;
+          }).join('') || '<tr><td colspan="5" style="color:#6b6270;">Sin revisiones registradas todavía.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bloque-titulo">Gestión de accesos</div>
+    <div class="panel-erp">
+      <div class="barra-lista" style="margin-bottom:12px;"><span></span><button type="button" class="btn-secundario" id="btn-nuevo-acceso">+ Registrar acceso</button></div>
+      <table class="tabla-simple">
+        <thead><tr><th>Persona</th><th>Sistema</th><th>Rol/permiso</th><th>Última revisión</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+          ${(accesos || []).map(a => `
+            <tr>
+              <td>${a.persona}</td>
+              <td>${a.sistema}</td>
+              <td>${a.rol_permiso || '—'}</td>
+              <td>${a.fecha_ultima_revision || '—'}</td>
+              <td>
+                <select class="select-estado-acceso pill ${a.estado === 'activo' ? 'cumplida' : 'cancelada'}" data-id="${a.id}">
+                  <option value="activo" ${a.estado==='activo'?'selected':''}>Activo</option>
+                  <option value="revocado" ${a.estado==='revocado'?'selected':''}>Revocado</option>
+                </select>
+              </td>
+              <td><button type="button" class="btn-editar-fila btn-editar-acceso" data-id="${a.id}" title="Editar">✎</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin accesos registrados todavía.</td></tr>'}
+        </tbody>
+      </table>
     </div>`;
+
+  document.getElementById('btn-nuevo-mantenimiento').addEventListener('click', () => abrirFormMantenimiento(procesoId));
+  bloque.querySelectorAll('.btn-editar-mantenimiento').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormMantenimiento(procesoId, (mantenimientos || []).find(m => m.id === btn.dataset.id)));
+  });
+  document.getElementById('btn-nuevo-acceso').addEventListener('click', () => abrirFormAcceso(procesoId));
+  bloque.querySelectorAll('.btn-editar-acceso').forEach(btn => {
+    btn.addEventListener('click', () => abrirFormAcceso(procesoId, (accesos || []).find(a => a.id === btn.dataset.id)));
+  });
+  bloque.querySelectorAll('.select-estado-acceso').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      await supabase.from('gestion_accesos').update({ estado: sel.value, actualizado_en: new Date().toISOString() }).eq('id', sel.dataset.id);
+      cargarModulosTecnologia(procesoId);
+    });
+  });
 
   document.getElementById('btn-nuevo-activo').addEventListener('click', () => abrirFormActivo(procesoId));
   bloque.querySelectorAll('.btn-editar-activo').forEach(btn => {
@@ -2654,6 +2884,78 @@ async function cargarModulosTecnologia(procesoId) {
   bloque.querySelectorAll('.btn-editar-incidente-tec').forEach(btn => {
     btn.addEventListener('click', () => abrirFormIncidenteTecnico(procesoId, (incidentes || []).find(i => i.id === btn.dataset.id)));
   });
+}
+
+function abrirFormMantenimiento(procesoId, mantenimientoExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = mantenimientoExistente ? 'Editar revisión' : 'Nueva revisión de mantenimiento';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Período</label><input type="text" id="f-periodo-mant" required value="${mantenimientoExistente ? (mantenimientoExistente.periodo||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: Agosto 2026" /></div>
+    <div class="campo"><label><input type="checkbox" id="f-backups-mant" ${mantenimientoExistente && mantenimientoExistente.backups_verificados ? 'checked' : ''} style="width:auto;margin-right:8px;" />Copias de seguridad verificadas</label></div>
+    <div class="campo"><label><input type="checkbox" id="f-actualizaciones-mant" ${mantenimientoExistente && mantenimientoExistente.actualizaciones_revisadas ? 'checked' : ''} style="width:auto;margin-right:8px;" />Actualizaciones pendientes revisadas</label></div>
+    <div class="campo"><label><input type="checkbox" id="f-dominios-mant" ${mantenimientoExistente && mantenimientoExistente.dominios_certificados_vigentes ? 'checked' : ''} style="width:auto;margin-right:8px;" />Dominios y certificados vigentes</label></div>
+    <div class="campo"><label><input type="checkbox" id="f-permisos-mant" ${mantenimientoExistente && mantenimientoExistente.permisos_base_datos_verificados ? 'checked' : ''} style="width:auto;margin-right:8px;" />Permisos de base de datos verificados</label></div>
+    <div class="campo"><label>Responsable</label><input type="text" id="f-responsable-mant" value="${mantenimientoExistente ? (mantenimientoExistente.responsable||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Observaciones</label><textarea id="f-observaciones-mant">${mantenimientoExistente ? (mantenimientoExistente.observaciones || '') : ''}</textarea></div>
+    <div class="campo"><label>Fecha</label><input type="date" id="f-fecha-mant" value="${mantenimientoExistente && mantenimientoExistente.fecha ? mantenimientoExistente.fecha : new Date().toISOString().slice(0,10)}" /></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      periodo: document.getElementById('f-periodo-mant').value,
+      backups_verificados: document.getElementById('f-backups-mant').checked,
+      actualizaciones_revisadas: document.getElementById('f-actualizaciones-mant').checked,
+      dominios_certificados_vigentes: document.getElementById('f-dominios-mant').checked,
+      permisos_base_datos_verificados: document.getElementById('f-permisos-mant').checked,
+      responsable: document.getElementById('f-responsable-mant').value,
+      observaciones: document.getElementById('f-observaciones-mant').value,
+      fecha: document.getElementById('f-fecha-mant').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (mantenimientoExistente) {
+      await supabase.from('mantenimiento_tecnologico').update(datos).eq('id', mantenimientoExistente.id);
+    } else {
+      await supabase.from('mantenimiento_tecnologico').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosTecnologia(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
+}
+
+function abrirFormAcceso(procesoId, accesoExistente) {
+  capaForm.classList.add('visible');
+  tituloForm.textContent = accesoExistente ? 'Editar acceso' : 'Registrar acceso';
+  formGenerico.innerHTML = `
+    <div class="campo"><label>Persona</label><input type="text" id="f-persona-acc" required value="${accesoExistente ? (accesoExistente.persona||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Sistema</label><input type="text" id="f-sistema-acc" required value="${accesoExistente ? (accesoExistente.sistema||'').replace(/"/g,'&quot;') : ''}" placeholder="Ej: ERP, Supabase, GitHub..." /></div>
+    <div class="campo"><label>Rol/permiso</label><input type="text" id="f-rol-acc" value="${accesoExistente ? (accesoExistente.rol_permiso||'').replace(/"/g,'&quot;') : ''}" /></div>
+    <div class="campo"><label>Fecha otorgado</label><input type="date" id="f-fecha-otorgado-acc" value="${accesoExistente && accesoExistente.fecha_otorgado ? accesoExistente.fecha_otorgado : ''}" /></div>
+    <div class="campo"><label>Última revisión</label><input type="date" id="f-fecha-revision-acc" value="${accesoExistente && accesoExistente.fecha_ultima_revision ? accesoExistente.fecha_ultima_revision : new Date().toISOString().slice(0,10)}" /></div>
+    <div class="campo"><label>Notas</label><textarea id="f-notas-acc">${accesoExistente ? (accesoExistente.notas || '') : ''}</textarea></div>
+    <div class="fila-botones"><button type="button" class="btn-salir" id="f-cancelar">Cancelar</button><button type="submit" class="btn-primario">Guardar</button></div>`;
+  formGenerico.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      proceso_id: procesoId,
+      persona: document.getElementById('f-persona-acc').value,
+      sistema: document.getElementById('f-sistema-acc').value,
+      rol_permiso: document.getElementById('f-rol-acc').value,
+      fecha_otorgado: document.getElementById('f-fecha-otorgado-acc').value || null,
+      fecha_ultima_revision: document.getElementById('f-fecha-revision-acc').value || null,
+      notas: document.getElementById('f-notas-acc').value,
+      actualizado_en: new Date().toISOString()
+    };
+    if (accesoExistente) {
+      await supabase.from('gestion_accesos').update(datos).eq('id', accesoExistente.id);
+    } else {
+      await supabase.from('gestion_accesos').insert(datos);
+    }
+    cerrarForm();
+    cargarModulosTecnologia(procesoId);
+  };
+  document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
 }
 
 function abrirFormActivo(procesoId, activoExistente) {
