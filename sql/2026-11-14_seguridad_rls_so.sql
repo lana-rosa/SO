@@ -1,6 +1,6 @@
 -- =====================================================================
 -- Seguridad del Sistema Operativo (schema sistema_operativo)
--- Fecha: 2026-11-14 · Estado: PROPUESTA, NO APLICADA
+-- Fecha: 2026-11-14 · Estado: APLICADA el 14-nov-2026 (migración so_seguridad_rls_por_rol)
 --
 -- Problema: las 54 tablas tienen la política "so_authenticated_all"
 -- (USING true / WITH CHECK true para authenticated), y en este mismo
