@@ -678,13 +678,24 @@ function pintarFlujo(f) {
 
 function pintarVentas(ventas) {
   const cont = document.getElementById('erp-ventas');
+  // Formato del ERP: { tienda|redes|clases: { mes_actual: {num, total}, mes_anterior: {num, total}, ... } }
+  const CANALES = { tienda: 'Tienda (POS)', redes: 'WhatsApp / redes', clases: 'Clases (Academy)' };
   if (!ventas || typeof ventas !== 'object') { cont.innerHTML = '<div class="vacio-mini">Sin datos de ventas.</div>'; return; }
+  let totalActual = 0, totalAnterior = 0, hay = false;
   const filas = Object.entries(ventas)
-    .filter(([, v]) => typeof v === 'number' || typeof v === 'string')
-    .slice(0, 6)
-    .map(([k, v]) => `<div class="fila-metrica"><span class="etq">${k.replace(/_/g, ' ')}</span><span class="val">${typeof v === 'number' ? formatoCOP(v) : v}</span></div>`)
-    .join('');
-  cont.innerHTML = filas || '<div class="vacio-mini">Sin datos de ventas.</div>';
+    .filter(([, v]) => v && typeof v === 'object' && v.mes_actual)
+    .map(([canal, v]) => {
+      hay = true;
+      const act = v.mes_actual || {}, ant = v.mes_anterior || {};
+      totalActual += Number(act.total) || 0;
+      totalAnterior += Number(ant.total) || 0;
+      return `<div class="fila-metrica"><span class="etq">${CANALES[canal] || canal.replace(/_/g, ' ')} · ${act.num || 0} venta(s)</span><span class="val">${formatoCOP(act.total || 0)}</span></div>`;
+    }).join('');
+  if (!hay) { cont.innerHTML = '<div class="vacio-mini">Sin datos de ventas.</div>'; return; }
+  const variacion = totalAnterior > 0 ? Math.round((totalActual - totalAnterior) / totalAnterior * 100) : null;
+  cont.innerHTML = filas +
+    `<div class="fila-metrica" style="border-top:1px solid var(--borde);margin-top:6px;padding-top:8px;"><span class="etq">Total mes actual</span><span class="val">${formatoCOP(totalActual)}</span></div>` +
+    `<div class="fila-metrica"><span class="etq">Mes anterior</span><span class="val">${formatoCOP(totalAnterior)}${variacion === null ? '' : ` <small style="color:var(${variacion >= 0 ? '--verde' : '--rojo'});">(${variacion >= 0 ? '+' : ''}${variacion}%)</small>`}</span></div>`;
 }
 
 function pintarAlertas(alertas) {
@@ -756,7 +767,7 @@ async function cargarResumenErp() {
     if (data) {
       pintarTodoDesdeResumen(data);
       const edadMin = (Date.now() - new Date(data.actualizado_en).getTime()) / 60000;
-      marcarEstadoResumen('Actualizado ' + new Date(data.actualizado_en).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) + (edadMin > 90 ? ' (puede estar desactualizado)' : ''));
+      marcarEstadoResumen('Actualizado ' + new Date(data.actualizado_en).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + (edadMin > 90 ? ' (puede estar desactualizado)' : ''));
       if (edadMin <= 180) return; // caché suficientemente fresca, no golpeamos el ERP en vivo
     }
   } catch (e) {
