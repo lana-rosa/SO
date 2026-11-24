@@ -3,6 +3,8 @@
 Fecha: 24-nov-2026 · Alcance: SOLO LECTURA. No se cambió código, base, RLS, configuración ni servicios. No hay secretos ni datos personales en este informe.
 Base consultada: Supabase `ngjoognzvehwjtpqwrqe`, schema `sistema_operativo` (consultas de catálogo, conteos y avisos de seguridad).
 
+> **Aprobación (24-nov-2026):** Jennifer escribió en este chat: «Apruebo iniciar la Fase 1 y publicar la Fase 0 en main». Alcance: Fase 1 en el orden 1) inmutabilidad documental, 2) permisos por proceso con el ERP, 3) PDF con QR y Excel, 4) buscador convencional. Cada migración: prueba en rollback, asesor de seguridad, plan de reversión y «¿Lo aplico? Sí o no» a Jennifer antes de aplicarla. Pendiente: escrito de Sara (se citará como correo/acta cuando llegue).
+
 ## 1. Resumen ejecutivo
 
 1. **La realidad no es Next.js/Vercel/Tailwind.** El SO es un `index.html` estático (≈285 KB, JavaScript en el mismo archivo) publicado en GitHub Pages, con Supabase (login + datos) y 5 endpoints `/api/pos/so/*` del Worker del ERP. Recomendación: **evolucionar sin cambiar de tecnología**.
