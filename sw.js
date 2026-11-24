@@ -3,7 +3,7 @@
 // reciente de internet primero, y solo usa la copia guardada si no hay
 // conexión. Así se evita el problema que tuvimos con el ERP, donde una
 // copia vieja se quedó sirviendo contenido desactualizado.
-const CACHE_NAME = 'lr-os-v2';
+const CACHE_NAME = 'lr-os-v3';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
