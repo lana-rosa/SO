@@ -402,6 +402,7 @@
         <h3 style="margin:0;font-size:16px;">Resumen del negocio <span id="erp-generado-en" style="font-size:11px;font-weight:400;color:var(--tinta-suave);"></span></h3>
         <button id="btn-actualizar-resumen" class="btn-secundario" style="font-size:12px;padding:6px 12px;">Actualizar ahora</button>
       </div>
+      <div id="erp-aviso" style="display:none;margin:8px 0;padding:10px 12px;border:1px solid var(--ambar);border-radius:8px;font-size:13px;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;"><span id="erp-aviso-texto"></span><button id="btn-reintentar-resumen" class="btn-secundario" style="font-size:12px;padding:6px 12px;">Reintentar</button></div>
       <div class="grid-erp" id="grid-erp">
         <div class="panel-erp"><h3>Flujo de caja (30 días)</h3><div id="erp-flujo" class="vacio-mini">Cargando…</div></div>
         <div class="panel-erp"><h3>Ventas del período</h3><div id="erp-ventas" class="vacio-mini">Cargando…</div></div>
@@ -748,6 +749,15 @@ function marcarEstadoResumen(texto) {
 
 // Intenta primero la caché (rápida, se refresca sola cada hora en el ERP).
 // Si no hay caché o está muy vieja (más de 3 horas), trae los datos en vivo.
+let fechaCacheResumen = null;
+
+function mostrarAvisoResumen(texto) {
+  const av = document.getElementById('erp-aviso');
+  if (!texto) { av.style.display = 'none'; return; }
+  document.getElementById('erp-aviso-texto').textContent = texto;
+  av.style.display = 'flex';
+}
+
 async function cargarResumenErp() {
   marcarEstadoResumen('Cargando…');
   try {
@@ -755,6 +765,7 @@ async function cargarResumenErp() {
     if (error) throw error;
     if (data) {
       pintarTodoDesdeResumen(data);
+      fechaCacheResumen = data.actualizado_en;
       const edadMin = (Date.now() - new Date(data.actualizado_en).getTime()) / 60000;
       marcarEstadoResumen('Actualizado ' + new Date(data.actualizado_en).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) + (edadMin > 90 ? ' (puede estar desactualizado)' : ''));
       if (edadMin <= 180) return; // caché suficientemente fresca, no golpeamos el ERP en vivo
@@ -776,13 +787,23 @@ async function actualizarResumenEnVivo() {
     erpFetch('/api/pos/so/resumen-crm'),
   ]);
   const [resumenFin, alertas, fondo, inventario, crm] = resultados.map(r => r.status === 'fulfilled' ? r.value : null);
-  pintarFlujo(resumenFin ? resumenFin.flujo_caja_30_dias : null);
-  pintarVentas(resumenFin ? resumenFin.ventas : null);
-  pintarAlertas(alertas ? alertas.alertas : null);
-  pintarFondo(fondo ? fondo.saldo : null, fondo ? fondo.proximos_hitos : null);
-  pintarInventario(inventario ? inventario.items_stock_bajo : null, inventario ? inventario.total_alertas : null);
-  pintarCrm(crm);
-  marcarEstadoResumen('Actualizado ' + new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) + ' (en vivo)');
+  const fallos = resultados.filter(r => r.status === 'rejected');
+  const noAutorizado = fallos.some(r => /no autorizado|unauthorized|jwt|token|401|403/i.test(String(r.reason && r.reason.message || r.reason)));
+  // Solo se vuelve a pintar lo que sí llegó; lo que falló conserva lo ya mostrado (caché).
+  if (resumenFin) { pintarFlujo(resumenFin.flujo_caja_30_dias); pintarVentas(resumenFin.ventas); }
+  if (alertas) pintarAlertas(alertas.alertas);
+  if (fondo) pintarFondo(fondo.saldo, fondo.proximos_hitos);
+  if (inventario) pintarInventario(inventario.items_stock_bajo, inventario.total_alertas);
+  if (crm) pintarCrm(crm);
+  if (fallos.length === 0) {
+    mostrarAvisoResumen(null);
+    marcarEstadoResumen('Actualizado ' + new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) + ' (en vivo)');
+    return;
+  }
+  const cuando = fechaCacheResumen ? new Date(fechaCacheResumen).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
+  if (noAutorizado) mostrarAvisoResumen('Vuelve a iniciar sesión para actualizar los datos.' + (cuando ? ' Se muestran los datos del ' + cuando + '.' : ''));
+  else mostrarAvisoResumen(cuando ? 'Datos del ' + cuando + '; no se pudieron actualizar.' : 'No se pudieron cargar los datos.');
+  marcarEstadoResumen(cuando ? 'Datos de caché del ' + cuando : 'Sin datos');
 }
 
 async function cargarProcesos() {
@@ -4558,6 +4579,7 @@ function cerrarForm() { capaForm.classList.remove('visible'); }
 
 document.getElementById('btn-nuevo-proyecto').addEventListener('click', () => abrirForm('proyecto'));
 document.getElementById('btn-nueva-evidencia').addEventListener('click', () => abrirForm('evidencia'));
+document.getElementById('btn-reintentar-resumen').addEventListener('click', () => actualizarResumenEnVivo());
 document.getElementById('btn-actualizar-resumen').addEventListener('click', async (e) => {
   e.target.disabled = true;
   e.target.textContent = 'Actualizando…';
