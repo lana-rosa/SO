@@ -123,7 +123,11 @@ No se puede comprobar desde aquí (consola de Supabase: copias diarias/PITR, y s
 
 ## 13. Decisiones pendientes de la Dirección (no tomadas)
 
-Integrantes de la Dirección (propuesta: Jennifer y Sara) · responsables de PA-07, PA-08, PEM-02, PEM-03, PEM-04, PM-05 · suplentes · tope de gasto externo · proveedor de IA · retención de datos · RPO/RTO · responsable de migraciones · segundo revisor.
+**Decidido (24-nov-2026, informado por el Orquestador general; Jennifer aprobó):** la Dirección = Jennifer (fundadora) y Sara (Gerente General). Como Sara construye y administra, las aprobaciones que afecten su propio trabajo las revisa Jennifer. Esto NO aprueba la Fase 1.
+
+**Propuesta para «Administradores de la organización»** (según roles reales del ERP, sin nombres): hoy hay 2 usuarios activos con rol `administrador` (se proponen estos dos; confirmar que son Jennifer y Sara), 1 cajero activo y 2 contadores (1 activo, 1 inactivo). Cajero y contador quedan fuera. Pendiente de confirmación de la Dirección.
+
+**Siguen sin definir:** responsables de PA-07, PA-08, PEM-02, PEM-03, PEM-04, PM-05 · suplentes · tope de gasto externo · proveedor de IA · retención de datos · RPO/RTO · responsable de migraciones · segundo revisor.
 
 ## 14. Verificaciones humanas pendientes
 
