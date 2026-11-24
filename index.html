@@ -296,9 +296,9 @@
   .pill{display:inline-block;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;}
   .pill.pendiente{background:#eef2f6;color:var(--tinta-suave);}
   .pill.en_curso, .pill.en_tratamiento{background:#fff3e0;color:var(--ambar);}
-  .pill.cumplida, .pill.mitigado, .pill.cerrado, .pill.vigente{background:#e6f4ef;color:var(--verde);}
+  .pill.cumplida, .pill.mitigado, .pill.cerrado, .pill.vigente, .pill.aprobado{background:#e6f4ef;color:var(--verde);}
   .pill.vencida{background:#fbe9e9;color:var(--rojo);}
-  .pill.cancelada, .pill.cancelado, .pill.obsoleto{background:var(--blanco-hueso);color:var(--tinta-suave);text-decoration:line-through;}
+  .pill.cancelada, .pill.cancelado, .pill.obsoleto, .pill.anulado{background:var(--blanco-hueso);color:var(--tinta-suave);text-decoration:line-through;}
   .pill.planeacion, .pill.identificado, .pill.borrador{background:#eef2f6;color:var(--tinta-suave);}
   .pill.pausado, .pill.en_revision, .pill.amarillo{background:#fff3e0;color:var(--ambar);}
   .pill.verde{background:#e6f4ef;color:var(--verde);}
@@ -4320,6 +4320,27 @@ function abrirFormEditarTarea(id) {
 }
 
 /* ---------------- DOCUMENTOS ---------------- */
+// Flujo de control documental (igual que el trigger de la base: la base es la que manda).
+const TRANSICIONES_DOCUMENTO = {
+  borrador: ['en_revision', 'anulado'],
+  en_revision: ['borrador', 'aprobado'],
+  aprobado: ['vigente', 'en_revision'],
+  vigente: ['obsoleto', 'anulado'],
+  obsoleto: [],
+  anulado: []
+};
+function mensajeErrorDocumento(error) {
+  const m = (error && error.message) || '';
+  if (/congelado/i.test(m)) return 'Este documento ya está aprobado: no se puede editar. Cree una nueva versión.';
+  if (/Transici/i.test(m)) return 'Ese cambio de estado no está permitido.';
+  if (/borrar/i.test(m)) return 'Un documento que no está en borrador no se borra: se anula.';
+  return 'No se pudo guardar el cambio: ' + m;
+}
+async function cambiarEstadoDocumento(id, valor) {
+  const { error } = await supabase.from('documentos').update({ estado: valor }).eq('id', id);
+  if (error) alert(mensajeErrorDocumento(error));
+  await cargarDocumentos();
+}
 async function cargarDocumentos() {
   const { data, error } = await supabase.from('documentos').select('*').order('creado_en', { ascending: false });
   if (error) { console.error(error); return; }
@@ -4332,7 +4353,7 @@ async function cargarDocumentos() {
       <td>${d.version}</td>
       <td>
         <select class="select-estado pill ${d.estado}" data-id="${d.id}">
-          ${['borrador','vigente','en_revision','obsoleto'].map(e => `<option value="${e}" ${d.estado === e ? 'selected' : ''}>${e.replace('_',' ')}</option>`).join('')}
+          ${[d.estado, ...(TRANSICIONES_DOCUMENTO[d.estado] || [])].map(e => `<option value="${e}" ${d.estado === e ? 'selected' : ''}>${e.replace('_',' ')}</option>`).join('')}
         </select>
       </td>
       <td>${d.fecha_vencimiento || '—'}</td>
@@ -4340,7 +4361,7 @@ async function cargarDocumentos() {
     </tr>`).join('') || '<tr><td colspan="6" style="color:#6b6270;">Sin documentos todavía.</td></tr>';
 
   cont.querySelectorAll('.select-estado').forEach(sel => {
-    sel.addEventListener('change', () => cambiarEstadoSimple('documentos', sel.dataset.id, sel.value, cargarDocumentos));
+    sel.addEventListener('change', () => cambiarEstadoDocumento(sel.dataset.id, sel.value));
   });
   cont.querySelectorAll('.btn-editar-fila').forEach(btn => {
     btn.addEventListener('click', () => abrirFormEditarDocumento(btn.dataset.id));
@@ -4373,13 +4394,14 @@ function abrirFormEditarDocumento(id) {
   document.getElementById('f-proceso').value = d.proceso_id || '';
   formGenerico.onsubmit = async (e) => {
     e.preventDefault();
-    await supabase.from('documentos').update({
+    const { error: errEd } = await supabase.from('documentos').update({
       nombre: document.getElementById('f-nombre').value,
       version: document.getElementById('f-version').value || '1.0',
       responsable: document.getElementById('f-responsable').value,
       fecha_vencimiento: document.getElementById('f-vencimiento').value || null,
       proceso_id: document.getElementById('f-proceso').value || null
     }).eq('id', id);
+    if (errEd) { alert(mensajeErrorDocumento(errEd)); return; }
     cerrarForm(); cargarDocumentos();
   };
   document.getElementById('f-cancelar').addEventListener('click', cerrarForm);
