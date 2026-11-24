@@ -1,7 +1,7 @@
 -- =====================================================================
 -- Fase 1 · Paso 1 — Control documental inmutable (schema sistema_operativo)
--- Fecha: 2026-11-24 · Estado: PROPUESTA, NO APLICADA (espera revisión de
--- seguridad y el «sí» de Jennifer). Reversa: *_REVERSA.sql
+-- Fecha: 2026-11-24 · Estado: APLICADA el 24-nov-2026 (migración so_documentos_inmutables) con el sí de Jennifer.
+-- Reversa: 2026-11-24_documentos_inmutables_REVERSA.sql. Revisión del asesor de seguridad: pendiente.
 -- Reutiliza historial_versiones_documento; no toca los 21 procesos ni los
 -- códigos DOC-* existentes. Los 18 documentos actuales están en borrador.
 -- =====================================================================
