@@ -714,13 +714,16 @@ function pintarFondo(saldo, proximos_hitos) {
   cont.innerHTML = html || '<div class="vacio-mini">Sin datos de Fondo Emprender todavía.</div>';
 }
 
-function pintarInventario(items_stock_bajo, total_alertas) {
+// El inventario es del ERP: aquí solo se menciona la cantidad y se enlaza al ERP (sin lista de productos).
+const URL_INVENTARIO_ERP = 'https://larova.lanarosacrochet.com/erp/'; // ancla de la sección de inventario: pendiente de confirmar con el ERP
+function pintarInventario(items_stock_bajo, total_alertas, fecha) {
   const cont = document.getElementById('erp-inventario');
-  if (!items_stock_bajo || !items_stock_bajo.length) { cont.innerHTML = '<div class="vacio-mini">Sin ítems en stock crítico. ✓</div>'; return; }
-  cont.innerHTML = `<div class="fila-metrica"><span class="etq">Ítems bajo mínimo</span><span class="val neg">${total_alertas}</span></div>` +
-    '<ul class="lista-alerta" style="margin-top:8px;">' + items_stock_bajo.slice(0, 5).map(i =>
-      `<li class="atencion">${i.nombre} — stock ${i.stock_actual} (mín. ${i.stock_minimo})</li>`
-    ).join('') + '</ul>';
+  const n = typeof total_alertas === 'number' ? total_alertas : (items_stock_bajo ? items_stock_bajo.length : null);
+  const cuando = fecha ? ' · datos del ' + new Date(fecha).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+  const texto = n === null ? 'Sin datos de inventario.' : (n === 0 ? 'Inventario crítico: ningún producto por reponer. ✓' : 'Inventario crítico: ' + n + ' producto' + (n === 1 ? '' : 's') + ' por reponer.');
+  cont.innerHTML = `<div class="fila-metrica"><span class="etq">${texto}</span></div>` +
+    `<div style="margin-top:8px;font-size:12px;color:var(--tinta-suave);">${cuando.replace(' · ', '')}</div>` +
+    `<a href="${URL_INVENTARIO_ERP}" target="_blank" rel="noopener" class="btn-secundario" style="display:inline-block;margin-top:10px;font-size:12px;padding:6px 12px;text-decoration:none;">Ver en el ERP</a>`;
 }
 
 const ETIQUETAS_ESTADO_PEDIDO_CRM = { 'en produccion': 'En producción', 'en proceso': 'En proceso', 'listo': 'Listo', 'entregado': 'Entregado', 'sin_estado': 'Sin estado' };
@@ -739,7 +742,7 @@ function pintarTodoDesdeResumen(r) {
   pintarVentas(r.resumen_financiero ? r.resumen_financiero.ventas : null);
   pintarAlertas(r.alertas_activas ? r.alertas_activas.alertas : null);
   pintarFondo(r.fondo_emprender ? r.fondo_emprender.saldo : null, r.fondo_emprender ? r.fondo_emprender.proximos_hitos : null);
-  pintarInventario(r.inventario_critico ? r.inventario_critico.items_stock_bajo : null, r.inventario_critico ? r.inventario_critico.total_alertas : null);
+  pintarInventario(r.inventario_critico ? r.inventario_critico.items_stock_bajo : null, r.inventario_critico ? r.inventario_critico.total_alertas : null, r.actualizado_en);
   pintarCrm(r.resumen_crm || null);
 }
 
@@ -793,7 +796,7 @@ async function actualizarResumenEnVivo() {
   if (resumenFin) { pintarFlujo(resumenFin.flujo_caja_30_dias); pintarVentas(resumenFin.ventas); }
   if (alertas) pintarAlertas(alertas.alertas);
   if (fondo) pintarFondo(fondo.saldo, fondo.proximos_hitos);
-  if (inventario) pintarInventario(inventario.items_stock_bajo, inventario.total_alertas);
+  if (inventario) pintarInventario(inventario.items_stock_bajo, inventario.total_alertas, new Date().toISOString());
   if (crm) pintarCrm(crm);
   if (fallos.length === 0) {
     mostrarAvisoResumen(null);
