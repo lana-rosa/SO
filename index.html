@@ -578,6 +578,7 @@ formLogin.addEventListener('submit', async (e) => {
     return;
   }
   sesionActual = data.session;
+  if (!(await esAdministradora())) return;
   mostrarApp();
 });
 
@@ -586,10 +587,31 @@ document.getElementById('btn-salir').addEventListener('click', async () => {
   location.reload();
 });
 
+// Acceso solo para administradoras. Se lee el rol del ERP (usuarios_roles); si no es administrador activo,
+// se cierra la sesión. La base además lo exige con RLS (esta comprobación no reemplaza a la base).
+// Para ampliar el acceso más adelante: usar los permisos del ERP (permisos_modulos_usuario), no una lista propia.
+async function esAdministradora() {
+  let ok = false;
+  try {
+    const { data } = await supabase.schema('public').from('usuarios_roles').select('rol, activo').eq('user_id', sesionActual.user.id).maybeSingle();
+    ok = !!(data && data.activo && data.rol === 'administrador');
+  } catch (e) { ok = false; }
+  if (!ok) {
+    await supabase.auth.signOut();
+    sesionActual = null;
+    appEl.classList.remove('visible');
+    pantallaLogin.style.display = '';
+    errorLogin.textContent = 'No tienes acceso a Gestión.';
+    errorLogin.style.display = 'block';
+  }
+  return ok;
+}
+
 async function verificarSesionExistente() {
   const { data } = await supabase.auth.getSession();
   if (data.session) {
     sesionActual = data.session;
+    if (!(await esAdministradora())) return;
     mostrarApp();
   }
 }
